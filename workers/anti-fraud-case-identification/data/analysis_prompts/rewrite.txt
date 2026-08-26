@@ -1,0 +1,7 @@
+只重写指定段落并解决 review_issues。继续遵守事实引用、渠道证据、结论边界和缺失数据规则，不修改其他段落。
+
+输出：
+{"paragraphs":[{"paragraph_id":"与target_paragraph_id一致","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+重写输入：
+{{PAYLOAD_JSON}}

@@ -1,0 +1,9 @@
+services:
+  # Production core-chain projection uses TuGraph exclusively.
+  # Compatibility engines remain available only when explicitly requested.
+  neo4j:
+    profiles: ["compatibility"]
+
+  janusgraph:
+    profiles: ["compatibility"]
+

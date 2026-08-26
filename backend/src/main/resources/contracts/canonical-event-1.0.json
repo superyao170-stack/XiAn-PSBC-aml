@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CanonicalEvent v1",
+  "type": "object",
+  "required": ["contractVersion", "eventId", "eventKind", "standardEventCode", "scenario", "action", "participants", "occurredAt", "evidenceRefs", "sourceRefs", "confidence", "normalizationVersion"],
+  "properties": {
+    "contractVersion": {"const": "CanonicalEvent/1.0"},
+    "eventId": {"type": "string"},
+    "eventKind": {"type": "string", "enum": ["ATOMIC", "AGGREGATE", "DERIVED"]},
+    "standardEventCode": {"type": "string"},
+    "scenario": {"type": "object", "required": ["code"]},
+    "action": {"type": "object", "required": ["code"]},
+    "participants": {"type": "array", "items": {"type": "object", "required": ["entityUid", "role"]}},
+    "method": {"type": "object"},
+    "occurredAt": {"type": "object", "required": ["start", "precision"]},
+    "location": {"type": "object"},
+    "result": {"type": "object"},
+    "attributes": {"type": "object"},
+    "evidenceRefs": {"type": "array", "items": {"type": "object"}},
+    "sourceRefs": {"type": "array", "items": {"type": "object"}},
+    "confidence": {"type": "number"},
+    "normalizationVersion": {"type": "string"},
+    "dedupKey": {"type": ["string", "null"]}
+  }
+}

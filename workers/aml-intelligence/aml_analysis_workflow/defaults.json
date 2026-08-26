@@ -1,0 +1,20 @@
+{
+  "kb_top_k": 3,
+  "node_workers": 4,
+  "model_attempts": 1,
+  "max_rewrite_rounds": 1,
+  "paragraph_lengths": {
+    "T1.1": {"target_chars": 220, "soft_min_chars": 120, "soft_max_chars": 360},
+    "T1.2": {"target_chars": 300, "soft_min_chars": 160, "soft_max_chars": 520},
+    "T1.3": {"target_chars": 420, "soft_min_chars": 220, "soft_max_chars": 760},
+    "T1.4": {"target_chars": 320, "soft_min_chars": 160, "soft_max_chars": 600},
+    "T1.5": {"target_chars": 300, "soft_min_chars": 160, "soft_max_chars": 560},
+    "T2.1": {"target_chars": 240, "soft_min_chars": 120, "soft_max_chars": 420},
+    "T2.2": {"target_chars": 300, "soft_min_chars": 160, "soft_max_chars": 560},
+    "T2.3.1": {"target_chars": 360, "soft_min_chars": 180, "soft_max_chars": 680},
+    "T2.3.2": {"target_chars": 260, "soft_min_chars": 120, "soft_max_chars": 500},
+    "T2.3.3": {"target_chars": 300, "soft_min_chars": 140, "soft_max_chars": 560},
+    "T2.3.4": {"target_chars": 220, "soft_min_chars": 100, "soft_max_chars": 420},
+    "T2.4": {"target_chars": 400, "soft_min_chars": 220, "soft_max_chars": 760}
+  }
+}

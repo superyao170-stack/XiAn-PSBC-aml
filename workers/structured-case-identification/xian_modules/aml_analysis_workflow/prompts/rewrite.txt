@@ -1,0 +1,7 @@
+只重写输入指定的一个段落，解决review_issues，不修改其他段落。继续遵守事实引用、客户/账户粒度、知识库候选和缺失数据规则；不得通过删掉关键事实掩盖问题。“测试”和“Mock”允许正常出现；不得自行添加“模拟、演示、虚构、样例、示例、不可直接使用、不对应真实主体”等其他研发说明。长度范围仍为软性目标。
+
+输出：
+{"paragraphs":[{"paragraph_id":"与target_paragraph_id一致","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+重写输入：
+{{PAYLOAD_JSON}}

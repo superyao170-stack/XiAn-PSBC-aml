@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RiskExchangeEnvelope v1",
+  "type": "object",
+  "required": ["contractVersion", "sender", "receiver", "messageId", "idempotencyKey", "contentType", "contentVersion", "schemaVersion", "createdAt", "payloadDigest", "privacyProcessing", "payload"],
+  "properties": {
+    "contractVersion": {"const": "RiskExchangeEnvelope/1.0"},
+    "sender": {"type": "object", "required": ["institutionCode"]},
+    "receiver": {"type": "object", "required": ["institutionCode"]},
+    "messageId": {"type": "string"},
+    "idempotencyKey": {"type": "string"},
+    "contentType": {"type": "string"},
+    "contentVersion": {"type": "string"},
+    "schemaVersion": {"type": "string"},
+    "createdAt": {"type": "string"},
+    "payloadDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "privacyProcessing": {"type": "object", "required": ["classification", "containsDirectIdentifiers"]},
+    "payload": {}
+  }
+}

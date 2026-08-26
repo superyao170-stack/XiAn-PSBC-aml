@@ -1,0 +1,9 @@
+生成 T1.2“客户基本情况”和 T1.3“账户、设备与整体事件链”。
+
+T1.2整理客户身份、职业、地区和风险等级。T1.3按时间说明直接映射的账户/设备事实与风险事件链，区分登录、敏感操作、流水、规则命中和处置；不得把单一登录或单笔交易直接定性。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T1.2","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},{"paragraph_id":"T1.3","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

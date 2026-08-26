@@ -1,0 +1,10 @@
+生成analysis_text1中的T1.5“客户主体分析”。
+
+依据客户画像事实及T1.2至T1.4已生成内容，分析身份、职业/经营背景、客户风险等级与观察到的交易规模和行为是否具备可比较基础。不得重复罗列全部指标，不得引入上游未出现的新事实。没有收入、经营规模、用途或历史基线时，应明确只能形成待核实方向。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T1.5","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}
+

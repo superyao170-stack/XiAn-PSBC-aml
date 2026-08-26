@@ -1,0 +1,10 @@
+生成analysis_text1中的T1.4“资金来源与去向”。
+
+只依据预计算的收款/付款笔数、金额、净流入以及收付款方向交易对手数量，客观描述资金流入和流出构成。不得把汇总统计写成逐笔对应关系，不得写快进快出、资金停留时间、具体交易对手、具体地区、具体渠道或账户余额。没有足够的方向数据时说明无法完整判断资金来源和去向。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T1.4","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}
+

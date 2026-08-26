@@ -1,0 +1,107 @@
+server:
+  port: ${SERVER_PORT:3030}
+
+spring:
+  servlet:
+    multipart:
+      # 银行批次允许到 2 GiB；业务代码必须采用流式解析，禁止调用 MultipartFile#getBytes。
+      max-file-size: 2GB
+      max-request-size: 2GB
+      file-size-threshold: 10MB
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/databank}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        reWriteBatchedInserts: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: ${SPRING_FLYWAY_BASELINE_VERSION:1}
+    baseline-description: "${SPRING_FLYWAY_BASELINE_DESCRIPTION:Flyway Baseline}"
+
+worker:
+  python: ${WORKER_PYTHON:python3}
+  execution:
+    concurrency: ${WORKER_CONCURRENCY:5}
+    queue-capacity: ${WORKER_QUEUE_CAPACITY:1000}
+    thread-prefix: ${WORKER_THREAD_PREFIX:analysis-worker-}
+  unstructured:
+    root: ${UNSTRUCTURED_WORKER_ROOT:./worker/unstructured}
+  structured-case:
+    root: ${STRUCTURED_CASE_WORKER_ROOT:../workers/structured-case-identification}
+    # 留空时自动使用结构化案例 Worker 目录内的 .venv；部署环境仍可显式覆盖。
+    python: ${STRUCTURED_CASE_WORKER_PYTHON:}
+    # 报告生成、框架抽取和相似度匹配共用此总时限。
+    timeout-seconds: ${STRUCTURED_CASE_TIMEOUT_SECONDS:3600}
+    framework:
+      llm-enabled: ${STRUCTURED_CASE_FRAMEWORK_LLM_ENABLED:true}
+      llm-concurrency: ${STRUCTURED_CASE_FRAMEWORK_LLM_CONCURRENCY:5}
+      corenlp-enabled: ${STRUCTURED_CASE_FRAMEWORK_CORENLP_ENABLED:true}
+      # 9000 已用于 MinIO，CoreNLP 在本地使用 9002。
+      corenlp-url: ${CORENLP_URL:http://127.0.0.1:9002}
+      corenlp-timeout-seconds: ${STRUCTURED_CASE_CORENLP_TIMEOUT_SECONDS:120}
+      service-max-attempts: ${STRUCTURED_CASE_SERVICE_MAX_ATTEMPTS:3}
+  anti-fraud-case:
+    # 反欺诈与反洗钱采用平行 Worker 目录；仅复用底层抽取和相似度算法。
+    root: ${ANTI_FRAUD_CASE_WORKER_ROOT:../workers/anti-fraud-case-identification}
+    python: ${ANTI_FRAUD_CASE_WORKER_PYTHON:}
+  aml-intelligence:
+    root: ${AML_INTELLIGENCE_WORKER_ROOT:workers/aml-intelligence}
+    # 留空时与结构化案例 Worker 共用 workers/.venv。
+    python: ${AML_INTELLIGENCE_WORKER_PYTHON:}
+    timeout-seconds: ${AML_INTELLIGENCE_TIMEOUT_SECONDS:600}
+
+data:
+  structured:
+    root: ${STRUCTURED_DATA_ROOT:./data/structured}
+
+graph:
+  active-engine: ${GRAPH_ACTIVE_ENGINE:tugraph}
+  neo4j:
+    uri: ${NEO4J_URI:bolt://localhost:7688}
+    username: ${NEO4J_USERNAME:neo4j}
+    password: ${NEO4J_PASSWORD:neo4j@123}
+  tugraph:
+    uri: ${TUGRAPH_URI:bolt://localhost:7687}
+    database: ${TUGRAPH_DATABASE:BankGraph}
+    host: ${TUGRAPH_HOST:localhost}
+    port: ${TUGRAPH_PORT:7687}
+    username: ${TUGRAPH_USERNAME:admin}
+    password: ${TUGRAPH_PASSWORD:tugraph@123}
+  janusgraph:
+    host: ${JANUSGRAPH_HOST:localhost}
+    port: ${JANUSGRAPH_PORT:8182}
+
+analytics:
+  base-url: ${ANALYTICS_BASE_URL:http://localhost:18082}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.datagraph.bank: ${APP_LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:WARN}
+
+jwt:
+  secret: ${JWT_SECRET:bankgraph-jwt-secret-key-2026-abcdefghijklmnopqrstuvwxyz}
+  expiration: ${JWT_EXPIRATION:86400000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}

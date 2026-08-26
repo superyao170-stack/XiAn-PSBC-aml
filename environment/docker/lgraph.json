@@ -1,0 +1,37 @@
+{
+  "database": {
+    "db_path": "/home/tugraph/storage",
+    "wal_path": "/home/tugraph/storage/wal",
+    "db_type": "rocksdb",
+    "max_edge_count": 100000000,
+    "max_vertex_count": 100000000,
+    "cache_size": 4096,
+    "cache_policy": "LRU",
+    "sync": false,
+    "transaction": true
+  },
+  "network": {
+    "ip": "0.0.0.0",
+    "port": 7687,
+    "http_port": 9090,
+    "protocol": "bolt",
+    "backlog": 1024,
+    "timeout": 300
+  },
+  "security": {
+    "enable": true,
+    "user": "admin",
+    "password": "tugraph@123",
+    "auth_type": "basic"
+  },
+  "log": {
+    "level": "info",
+    "file": "/home/tugraph/storage/logs/lgraph.log",
+    "max_size": 100,
+    "max_files": 10
+  },
+  "thread": {
+    "worker_count": 8,
+    "io_thread_count": 4
+  }
+}

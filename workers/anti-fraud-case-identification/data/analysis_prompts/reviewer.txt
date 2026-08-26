@@ -1,0 +1,9 @@
+审查全部12个段落：事实引用有效；渠道、客户、账户、设备、IP、资金和处置均未补造；规则命中未被写成诈骗认定；外部线索、投诉陈述、日志和司法结果未混淆；综合段落没有新增事实。数据不足应使用 partial/not_assessable。
+
+输出：
+{"pass":true,"issues":[],"rewrite_targets":[]}
+或
+{"pass":false,"issues":[{"paragraph_id":"T2.3.2","code":"EVIDENCE_ERROR","message":"...","severity":"error|warning"}],"rewrite_targets":["T2.3.2"]}
+
+审查输入：
+{{PAYLOAD_JSON}}

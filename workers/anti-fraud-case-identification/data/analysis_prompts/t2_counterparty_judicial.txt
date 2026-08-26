@@ -1,0 +1,9 @@
+生成 T2.3.3“交易对手方向”和 T2.3.4“外部线索与处置方向”。
+
+T2.3.3只写已提供的交易对手、关系和资金事实，不猜测分工。T2.3.4区分公安/监管/反诈平台线索、投诉陈述、查询结果和已实施的止付冻结或功能限制；没有材料时输出 not_assessable。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T2.3.3","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},{"paragraph_id":"T2.3.4","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

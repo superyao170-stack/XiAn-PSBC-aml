@@ -1,0 +1,9 @@
+生成 T2.1“案例概述”和 T2.2“客户主体分析”。
+
+T2.1说明线索渠道、触发来源、观察期、主体及主要风险链。T2.2比较客户职业/历史用途与已提供的账户行为；缺少收入或历史基线时不得断言画像不符。公安下发可写为线索事实，不得扩写为定罪结论。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T2.1","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},{"paragraph_id":"T2.2","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

@@ -1,0 +1,9 @@
+生成 T1.1“发现情况”。
+
+从渠道、触发事实和 T1.2 至 T1.5 提炼摘要，覆盖发现来源、主体、最重要的操作/资金风险组合、已实施处置和结论边界，不与后文逐句重复。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T1.1","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

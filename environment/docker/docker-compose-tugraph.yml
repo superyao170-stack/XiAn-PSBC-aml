@@ -1,0 +1,18 @@
+
+services:
+  tugraph:
+    image: tugraph/tugraph-runtime:3.7.0
+    container_name: bankgraph-tugraph
+    ports:
+      - "7687:7687"
+      - "9090:9090"
+    volumes:
+      - tugraph_data:/home/tugraph/storage
+    environment:
+      - TUGRAPH_USER=admin
+      - TUGRAPH_PASSWORD=tugraph@123
+    command: ["bash", "-c", "lgraph_server -c /home/tugraph/etc/lgraph.json"]
+    restart: unless-stopped
+
+volumes:
+  tugraph_data:

@@ -1,0 +1,10 @@
+生成analysis_text1中的T1.1“发现情况”。
+
+从案例触发事实及T1.2至T1.5中提炼一段摘要，覆盖发现来源、涉及客户、最重要的客观交易表现和当前可疑性边界。不得添加新事实，不得把候选疑点升级为确定结论，避免与后文逐句重复。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T1.1","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}
+

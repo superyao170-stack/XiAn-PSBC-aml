@@ -1,0 +1,9 @@
+生成 T2.4“综合分析”。
+
+汇总 T2.1 至 T2.3.4，不增加事实。按“可靠线索—相互支持的风险事件链—反证或正常解释—数据缺口—建议核验/处置”组织。不得声称已经认定诈骗或已经实施输入未记载的措施。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T2.4","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

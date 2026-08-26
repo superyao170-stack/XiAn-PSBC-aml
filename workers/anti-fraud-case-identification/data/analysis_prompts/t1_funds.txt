@@ -1,0 +1,9 @@
+生成 T1.4“资金来源与去向”。
+
+仅依据风险事件链中可核验的资金事实描述多头转入、归集、快速转出、取现或受限交易。金额、比例和时序必须逐项引用。不能建立连续资金对应关系时说明边界。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T1.4","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

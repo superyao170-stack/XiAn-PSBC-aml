@@ -1,0 +1,20 @@
+[Unit]
+Description=BankGraph Risk Analytics Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luof
+Group=luof
+WorkingDirectory=/www/bankgraph/workers/risk-analytics-service
+Environment=ANALYTICS_HOST=127.0.0.1
+Environment=ANALYTICS_PORT=18082
+ExecStart=/usr/bin/python3 /www/bankgraph/workers/risk-analytics-service/app.py
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:/www/bankgraph/analytics/app.log
+StandardError=append:/www/bankgraph/analytics/app.log
+
+[Install]
+WantedBy=multi-user.target

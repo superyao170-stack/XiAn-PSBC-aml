@@ -1,0 +1,9 @@
+生成 T2.3.1“资金交易方向”和 T2.3.2“账户及操作方向”。
+
+T2.3.1按时间和方向分析分散转入、资金停留、转出、失败交易与处置。T2.3.2分析新设备、IP、屏幕共享、收款人、限额、身份核验和提醒设置；说明多个信号的组合关系，单一信号不得升级为账户接管结论。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T2.3.1","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},{"paragraph_id":"T2.3.2","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

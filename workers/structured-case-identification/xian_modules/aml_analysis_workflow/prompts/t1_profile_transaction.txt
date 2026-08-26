@@ -1,0 +1,14 @@
+生成analysis_text1中的T1.2“客户基本情况”和T1.3“开户与整体交易”。
+
+T1.2只整理客户身份、职业/经营、地区、客户风险等级等已提供信息；缺失字段不逐项罗列。首次出现客户时优先使用“名称（实体ID）”。
+T1.3先说明统计窗口和特征粒度，再按客户组织交易标志、笔数、金额、活跃天数、首末时间、金额分布以及时间/地域/币种/方式等有意义的预计算指标。开户日期、机构、账户类型只有事实中存在时才写。不得声称存在逐笔流水、具体渠道、具体省份、具体账户或资金路径。
+
+输出：
+{"paragraphs":[
+  {"paragraph_id":"T1.2","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},
+  {"paragraph_id":"T1.3","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}
+]}
+
+任务输入：
+{{PAYLOAD_JSON}}
+

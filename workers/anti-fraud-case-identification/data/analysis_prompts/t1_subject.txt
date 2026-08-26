@@ -1,0 +1,9 @@
+生成 T1.5“客户主体分析”。
+
+综合 T1.2 至 T1.4，说明客户画像、账户用途、设备操作和资金行为是否形成相互支持的待核验风险组合；列出可能的正常解释和关键缺口，不重复罗列全部事实。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T1.5","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

@@ -1,0 +1,9 @@
+生成analysis_text2中的T2.4“综合分析”。
+
+汇总T2.1至T2.3.4，不增加新事实。按“有事实支持的风险指标—仍需核验的候选解释—反证或正常解释—关键数据缺口—针对性建议”组织结论。知识库候选ID只用于内部signal_refs，正文不展示事件ID和内部阈值。不得声称已经报送、已经认定违法或已经采取输入未记载的措施。
+
+输出：
+{"paragraphs":[{"paragraph_id":"T2.4","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

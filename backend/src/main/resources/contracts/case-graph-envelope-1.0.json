@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CaseGraphEnvelope v1",
+  "type": "object",
+  "required": ["contractVersion", "envelopeId", "tenant", "case", "entities", "events", "evidences", "relationships", "schemaVersion", "sourceRefs", "producer", "generatedAt", "contentHash"],
+  "properties": {
+    "contractVersion": {"const": "CaseGraphEnvelope/1.0"},
+    "envelopeId": {"type": "string", "minLength": 1},
+    "tenant": {"type": "object", "required": ["bankCode"], "properties": {"bankCode": {"type": "string"}, "workspaceId": {"type": ["string", "number", "null"]}}},
+    "case": {"type": "object", "required": ["caseId", "caseVersion"], "properties": {"caseId": {"type": "string"}, "caseVersion": {"type": "number"}}},
+    "entities": {"type": "array", "items": {"type": "object"}},
+    "events": {"type": "array", "items": {"type": "object"}},
+    "evidences": {"type": "array", "items": {"type": "object"}},
+    "relationships": {"type": "array", "items": {"type": "object", "required": ["type", "source", "target"]}},
+    "schemaVersion": {"type": "string"},
+    "sourceRefs": {"type": "array", "items": {"type": "object"}},
+    "producer": {"type": "object", "required": ["type", "id", "version"]},
+    "generatedAt": {"type": "string"},
+    "confidence": {"type": ["number", "null"]},
+    "contentHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

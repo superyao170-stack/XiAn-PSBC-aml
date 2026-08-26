@@ -1,0 +1,17 @@
+{
+  "case_id": "FRD-YYYYMMDD-001",
+  "case_name": "反欺诈案例名称",
+  "case_description": "案例事实摘要",
+  "business_domain": "反欺诈",
+  "渠道": "手机银行",
+  "case_type": "电信网络诈骗资金归集转移",
+  "submission_direction": "03",
+  "case_trigger": "交易监测或外部线索触发",
+  "urgency": "01",
+  "report_date": "2026-08-25",
+  "case_status": "调查复核中",
+  "risk_level": "高风险",
+  "suspected_crime_type": "待核验诈骗类型",
+  "suspicious_transaction_codes": "FRD-XXXX-规则名称",
+  "disposition_measures": "已实施处置；没有时留空"
+}

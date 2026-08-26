@@ -1,0 +1,15 @@
+生成analysis_text2客户交易分析中的T2.3.3“交易对手方向”和T2.3.4“司法查询方向”。
+
+T2.3.3可以依据唯一交易对手总数及收付款方向数量分析对手覆盖面，但不能将总数直接解释为一次性对手、无关联对手或异常分散，也不能补写对手名称、地区、身份和交易用途。
+T2.3.4只使用输入明确提供的司法查询、协查、冻结、止付或查控事实；这些事实不得相互替代。没有相关事实时输出not_assessable并简要说明现有输入未提供司法查询结果。
+知识候选仅用于提示分析角度，不能作为司法事实或规则命中依据。
+
+输出：
+{"paragraphs":[
+  {"paragraph_id":"T2.3.3","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},
+  {"paragraph_id":"T2.3.4","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}
+]}
+
+任务输入：
+{{PAYLOAD_JSON}}
+

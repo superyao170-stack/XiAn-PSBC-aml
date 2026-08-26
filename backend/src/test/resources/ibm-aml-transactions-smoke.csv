@@ -1,0 +1,4 @@
+Timestamp,From Bank,Account,To Bank,Account,Amount Received,Receiving Currency,Amount Paid,Payment Currency,Payment Format,Is Laundering
+2022/09/01 02:38,001,ACC-001,002,ACC-002,210154.74,US Dollar,210154.74,US Dollar,ACH,1
+2022/09/02 14:36,003,ACC-003,002,ACC-002,5326.79,US Dollar,5326.79,US Dollar,ACH,1
+2022/09/03 14:09,002,ACC-002,001,ACC-001,4634.81,US Dollar,4634.81,US Dollar,ACH,1

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InferenceEvidence v1",
+  "type": "object",
+  "required": ["contractVersion", "evidenceId", "runId", "evidenceType", "target", "producer", "inputSnapshot", "score", "decision", "reasonCodes", "contributions", "evidenceRefs", "pathEvidence", "executionRef", "generatedAt"],
+  "properties": {
+    "contractVersion": {"const": "InferenceEvidence/1.0"},
+    "evidenceId": {"type": "string"},
+    "runId": {"type": "string"},
+    "evidenceType": {"type": "string", "enum": ["RULE", "MODEL", "STATISTICAL", "FUSION", "MANUAL"]},
+    "target": {"type": "object", "required": ["type", "id"]},
+    "producer": {"type": "object"},
+    "inputSnapshot": {"type": "object", "required": ["id", "sha256"]},
+    "window": {"type": ["object", "null"]},
+    "score": {"type": "number"},
+    "threshold": {"type": ["number", "null"]},
+    "decision": {"type": "string"},
+    "reasonCodes": {"type": "array"},
+    "contributions": {"type": "array"},
+    "evidenceRefs": {"type": "array"},
+    "pathEvidence": {"type": "array"},
+    "evidenceSubgraphRef": {"type": ["string", "null"]},
+    "executionRef": {"type": "object", "required": ["runId"]},
+    "generatedAt": {"type": "string"}
+  }
+}

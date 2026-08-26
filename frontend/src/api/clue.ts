@@ -1,0 +1,10 @@
+import request from '@/utils/request'
+export const getCluesApi=(params?:Record<string,unknown>)=>request.get('/api/v1/clues',{params})
+export const updateClueStatusApi=(id:string,status:string)=>request.patch(`/api/v1/clues/${id}/status`,{status})
+export const mergeClueApi=(id:string,caseId:string)=>request.post(`/api/v1/clues/${id}/merge/${caseId}`)
+export const analyzeGraphCluesApi=(data:Record<string,unknown>)=>request.post('/api/v1/clues/analyze',data)
+export const getClueApi=(id:string)=>request.get(`/api/v1/clues/${id}`)
+export const getClueRunsApi=(bankCode?:string)=>request.get('/api/v1/clues/runs',{params:{bankCode}})
+export const createClueApi=(data:Record<string,unknown>)=>request.post('/api/v1/clues',data)
+export const updateClueApi=(id:string,data:Record<string,unknown>)=>request.put(`/api/v1/clues/${id}`,data)
+export const deleteClueApi=(id:string)=>request.delete(`/api/v1/clues/${id}`)

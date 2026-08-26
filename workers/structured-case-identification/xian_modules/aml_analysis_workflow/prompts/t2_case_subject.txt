@@ -1,0 +1,13 @@
+生成analysis_text2中的T2.1“案例概述”和T2.2“客户主体分析”。
+
+T2.1概括案例来源、观察范围、涉及客户、主要交易特征组合和当前状态。若basic_info提供case_facts和risk_event_name，需用“名称（实体ID）+候选风险+关键案情事实”的形式保留在本段，并明确这些内容仍待核验。它是案例概述，不强制强调多主体；输入没有角色划分时不得使用核心客户、关联客户、排除客户等确定角色。
+T2.2结合客户身份/职业背景、basic_info已提供的职务或交易对手背景与客户级交易特征作审慎分析。若引用case_facts，应保留客户实体ID，并把risk_event_name表述为候选风险。只有输入提供可比较的收入、经营规模、账户用途或基线时，才判断交易与画像是否匹配；否则明确缺少比较基础。
+
+输出：
+{"paragraphs":[
+  {"paragraph_id":"T2.1","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},
+  {"paragraph_id":"T2.2","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}
+]}
+
+任务输入：
+{{PAYLOAD_JSON}}

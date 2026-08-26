@@ -1,0 +1,15 @@
+生成analysis_text2客户交易分析中的T2.3.1“资金交易方向”和T2.3.2“账号方向”。
+
+T2.3.1从交易规模、频率、收付方向、夜间/周末分布、金额波动和地域/币种/方式多样性中选择相互支持的事实，形成分层、审慎的候选疑点。单项指标不是犯罪证据；需要同时说明可能的正常解释或待核实项。
+T2.3.2只分析输入能够支持的账户数量、开户、账户用途、账号行为或账户间关系。客户级汇总特征不能证明具体账号快进快出、过渡使用、集中归集或分散转出；缺少账户级流水时应输出not_assessable或partial并说明边界。
+知识候选仅用于提示分析角度，不能替代事实和机构正式规则。
+
+输出：
+{"paragraphs":[
+  {"paragraph_id":"T2.3.1","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"},
+  {"paragraph_id":"T2.3.2","text":"...","fact_refs":[],"signal_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}
+]}
+
+任务输入：
+{{PAYLOAD_JSON}}
+

@@ -1,0 +1,3 @@
+source_record_id,account_hash,counterparty_hash,occurred_at,currency,amount,transaction_type,channel
+SMOKE-001,account-001,counterparty-001,2026-07-18T10:30:00,CNY,1288.50,TRANSFER,MOBILE
+SMOKE-002,account-002,counterparty-002,2026-07-18T11:00:00,CNY,5000.00,CASH,COUNTER
