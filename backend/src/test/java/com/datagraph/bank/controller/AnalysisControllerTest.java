@@ -69,9 +69,10 @@ class AnalysisControllerTest {
         MockMultipartFile basic = jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"CASE-1\"}");
         MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUST-1\"}]");
         MockMultipartFile accounts = jsonFile("accounts", "accounts.json", "[]");
+        MockMultipartFile analysis = jsonFile("analysisTexts", "analysis_texts.json", "{\"analysis_text1\":\"已有报告\"}");
 
         CommonResult<Map<String, Object>> result = controller.uploadStructuredCaseFile(
-                basic, customers, "HISTORICAL", null, accounts, null);
+                basic, customers, "HISTORICAL", analysis, accounts, null);
 
         assertEquals(200, result.getCode());
         assertEquals("HISTORICAL", result.getData().get("caseType"));
@@ -79,7 +80,7 @@ class AnalysisControllerTest {
                 .resolve(String.valueOf(result.getData().get("uploadToken")));
         assertTrue(Files.isRegularFile(uploadDirectory.resolve("basic_info.json")));
         assertTrue(Files.isRegularFile(uploadDirectory.resolve("customers.json")));
-        assertTrue(Files.notExists(uploadDirectory.resolve("analysis_texts.json")));
+        assertTrue(Files.isRegularFile(uploadDirectory.resolve("analysis_texts.json")));
         assertTrue(Files.isRegularFile(uploadDirectory.resolve("accounts.json")));
         assertTrue(Files.notExists(uploadDirectory.resolve("other_entities.json")));
     }
@@ -97,15 +98,20 @@ class AnalysisControllerTest {
     }
 
     @Test
-    void historicalUploadNoLongerRequiresExistingSuspiciousReport() throws Exception {
+    void historicalUploadRequiresExistingSuspiciousReport() throws Exception {
         MockMultipartFile basic = jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"CASE-1\"}");
         MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUST-1\"}]");
+        MockMultipartFile analysis = jsonFile("analysisTexts", "analysis_texts.json", "{\"analysis_text1\":\"历史分析文本\"}");
 
-        CommonResult<Map<String, Object>> result = controller.uploadStructuredCaseFile(
+        CommonResult<Map<String, Object>> missing = controller.uploadStructuredCaseFile(
                 basic, customers, "HISTORICAL", null, null, null);
+        CommonResult<Map<String, Object>> accepted = controller.uploadStructuredCaseFile(
+                basic, customers, "HISTORICAL", analysis, null, null);
 
-        assertEquals(200, result.getCode());
-        assertEquals("HISTORICAL", result.getData().get("recognitionMode"));
+        assertEquals(400, missing.getCode());
+        assertTrue(missing.getMessage().contains("analysis_texts.json"));
+        assertEquals(200, accepted.getCode());
+        assertEquals("HISTORICAL", accepted.getData().get("recognitionMode"));
     }
 
     @Test
@@ -150,6 +156,29 @@ class AnalysisControllerTest {
     }
 
     @Test
+    void antiFraudHistoricalCaseRequiresAndPersistsTextAnalysis() throws Exception {
+        MockMultipartFile basic = jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"FRD-H-1\"}");
+        MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUS-1\"}]");
+        MockMultipartFile accounts = jsonFile("accounts", "accounts.json", "[{\"entity_id\":\"ACC-1\"}]");
+        MockMultipartFile devices = jsonFile("devices", "devices.json", "[{\"device_id\":\"DEV-1\"}]");
+        MockMultipartFile analysis = jsonFile("textAnalysis", "text_analysis.json", "{\"text\":\"历史分析文本\"}");
+
+        CommonResult<Map<String, Object>> missing = controller.uploadAntiFraudCaseFiles(
+                basic, customers, accounts, devices, "HISTORICAL", null, null);
+        CommonResult<Map<String, Object>> accepted = controller.uploadAntiFraudCaseFiles(
+                basic, customers, accounts, devices, "HISTORICAL", null, analysis);
+
+        assertEquals(400, missing.getCode());
+        assertTrue(missing.getMessage().contains("text_analysis.json"));
+        assertEquals(200, accepted.getCode());
+        Path antiFraudRoot = structuredCaseRoot.resolveSibling("anti-fraud-case-identification");
+        Path uploadDirectory = antiFraudRoot.resolve("uploads")
+                .resolve(String.valueOf(accepted.getData().get("uploadToken")));
+        assertTrue(Files.isRegularFile(uploadDirectory.resolve("text_analysis.json")));
+        assertTrue(Files.notExists(uploadDirectory.resolve("event_chain.json")));
+    }
+
+    @Test
     void batchUploadValidatesCsvAndReturnsWorkerCaseCount() throws Exception {
         when(workerService.validateStructuredCaseBatch(any(Path.class), eq("HISTORICAL")))
                 .thenReturn(Map.of(
@@ -185,6 +214,29 @@ class AnalysisControllerTest {
         assertEquals(400, result.getCode());
         assertTrue(result.getMessage().contains(".csv 或 .xlsx"));
         verifyNoInteractions(workerService);
+    }
+
+    @Test
+    void antiFraudBatchUploadUsesAntiFraudWorkerAndReturnsCaseCount() throws Exception {
+        when(workerService.validateAntiFraudCaseBatch(any(Path.class), eq("NEW")))
+                .thenReturn(Map.of("status", "SUCCEEDED", "caseCount", 3, "sourceSha256", "fraud123"));
+        MockMultipartFile batch = new MockMultipartFile(
+                "file", "fraud_cases.csv", "text/csv",
+                ("basic_info,customers,accounts,devices,event_chain\n"
+                        + "\"{}\",\"[]\",\"[]\",\"[]\",\"[]\"\n")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        CommonResult<Map<String, Object>> result = controller.uploadAntiFraudCaseBatchFile(batch, "NEW");
+
+        assertEquals(200, result.getCode());
+        assertEquals("ANTI_FRAUD_CASE_PIPELINE", result.getData().get("workflow"));
+        assertEquals(3, result.getData().get("caseCount"));
+        Path antiFraudRoot = structuredCaseRoot.resolveSibling("anti-fraud-case-identification");
+        Path upload = antiFraudRoot.resolve("uploads")
+                .resolve(String.valueOf(result.getData().get("uploadToken")))
+                .resolve("cases.csv");
+        assertTrue(Files.isRegularFile(upload));
+        verify(workerService).validateAntiFraudCaseBatch(upload, "NEW");
     }
 
     @Test

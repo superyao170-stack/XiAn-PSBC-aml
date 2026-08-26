@@ -23,14 +23,13 @@ import java.util.concurrent.TimeUnit;
 public class CaseProcessingService {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
-    private final CaseRiskRatingService riskRating;
     private final Path amlRoot;
     private final Path fraudRoot;
     private final String amlPython;
     private final String fraudPython;
     private final long timeoutSeconds;
 
-    public CaseProcessingService(JdbcTemplate jdbc, ObjectMapper json, CaseRiskRatingService riskRating,
+    public CaseProcessingService(JdbcTemplate jdbc, ObjectMapper json,
             @Value("${worker.structured-case.root:../workers/structured-case-identification}") String amlRoot,
             @Value("${worker.anti-fraud-case.root:../workers/anti-fraud-case-identification}") String fraudRoot,
             @Value("${worker.structured-case.python:}") String amlPython,
@@ -39,7 +38,6 @@ public class CaseProcessingService {
             @Value("${worker.python:python3}") String fallbackPython) {
         this.jdbc = jdbc;
         this.json = json;
-        this.riskRating = riskRating;
         this.amlRoot = resolveRoot(amlRoot, "workers/structured-case-identification");
         this.fraudRoot = resolveRoot(fraudRoot, "workers/anti-fraud-case-identification");
         this.amlPython = WorkerPythonEnvironment.resolve(amlPython, this.amlRoot, fallbackPython);
@@ -59,7 +57,10 @@ public class CaseProcessingService {
 
     public Map<String,Object> page(String stage, String recognitionMode, String scenarioCode,
                                    String caseId, String bankCode, int pageNum, int pageSize) {
+        // Historical cases with a recognizable basic_info.risk_level auto-approve
+        // after extraction. Missing or unknown levels go to manual approval.
         StringBuilder where = new StringBuilder(" WHERE c.deleted=false AND p.processing_stage=?");
+        if (!"PENDING_APPROVAL".equals(stage)) where.append(" AND p.recognition_mode='NEW'");
         List<Object> args = new ArrayList<>();
         args.add(stage);
         if (recognitionMode != null && !recognitionMode.isBlank()) { where.append(" AND p.recognition_mode=?"); args.add(recognitionMode); }
@@ -74,7 +75,7 @@ public class CaseProcessingService {
             SELECT c.id,c.case_id AS "caseId",c.case_name AS "caseName",c.bank_code AS "bankCode",
                    c.scenario_code AS "scenarioCode",c.case_status AS "caseStatus",c.risk_level AS "riskLevel",
                    p.recognition_mode AS "recognitionMode",p.processing_stage AS "processingStage",
-                   p.recommended_risk_level AS "recommendedRiskLevel",p.risk_score AS "recommendedRiskScore",
+                   p.recommended_risk_level AS "recommendedRiskLevel",
                    p.created_at AS "createdAt",p.updated_at AS "updatedAt"
               FROM case_processing_pool p JOIN cf_risk_case c ON c.case_id=p.case_id
             """ + where + " ORDER BY p.updated_at DESC LIMIT ? OFFSET ?", dataArgs.toArray());
@@ -89,24 +90,21 @@ public class CaseProcessingService {
                    p.recognition_mode AS "recognitionMode",p.processing_stage AS "processingStage",
                    p.source_payload::text AS "sourcePayload",p.suspicious_report::text AS "suspiciousReport",
                    p.framework_result::text AS "frameworkResult",p.graph_snapshot::text AS "graphSnapshot",
-                   p.similarity_result::text AS "similarityResult",p.risk_score AS "recommendedRiskScore",
-                   p.recommended_risk_level AS "recommendedRiskLevel",p.risk_breakdown::text AS "riskBreakdown"
+                   p.similarity_result::text AS "similarityResult",
+                   p.recommended_risk_level AS "recommendedRiskLevel"
               FROM case_processing_pool p JOIN cf_risk_case c ON c.case_id=p.case_id
              WHERE p.case_id=? AND c.deleted=false
             """, caseId);
         Map<String,Object> result = new LinkedHashMap<>(row);
-        for (String field : List.of("sourcePayload","suspiciousReport","frameworkResult","graphSnapshot","similarityResult","riskBreakdown")) {
+        for (String field : List.of("sourcePayload","suspiciousReport","frameworkResult","graphSnapshot","similarityResult")) {
             Object value = result.get(field);
             result.put(field, value == null ? null : json.readTree(String.valueOf(value)));
         }
-        if (result.get("recommendedRiskLevel") == null && result.get("frameworkResult") instanceof JsonNode framework) {
-            JsonNode similarity = result.get("similarityResult") instanceof JsonNode node ? node : json.createObjectNode();
-            CaseRiskRatingService.Rating rating = riskRating.rate(framework, similarity);
-            result.put("recommendedRiskLevel", rating.level());
-            result.put("recommendedRiskScore", rating.score());
-            result.put("riskBreakdown", rating.breakdown());
-            jdbc.update("UPDATE case_processing_pool SET risk_score=?,recommended_risk_level=?,risk_breakdown=?::jsonb,updated_at=CURRENT_TIMESTAMP WHERE case_id=?",
-                    rating.score(), rating.level(), json.writeValueAsString(rating.breakdown()), caseId);
+        if (result.get("frameworkResult") instanceof JsonNode framework) {
+            String extractedRiskLevel = riskLevelFromBasicInfo(framework);
+            result.put("recommendedRiskLevel", extractedRiskLevel);
+            jdbc.update("UPDATE case_processing_pool SET risk_score=NULL,recommended_risk_level=?,risk_breakdown=NULL,updated_at=CURRENT_TIMESTAMP WHERE case_id=?",
+                    extractedRiskLevel, caseId);
         }
         result.put("similarityRanking", jdbc.queryForList("""
             SELECT similar_case_id AS "caseId",algorithm_rank AS "algorithmRank",final_rank AS "finalRank",
@@ -205,13 +203,12 @@ public class CaseProcessingService {
             if ("FAILED".equals(similarity.path("status").asText())) throw new IllegalStateException(similarity.path("error").asText());
             ObjectNode stored = similarity.deepCopy();
             stored.set("matches", similarity.path("similarCases").deepCopy());
-            CaseRiskRatingService.Rating rating = riskRating.rate(framework, stored);
+            String extractedRiskLevel = riskLevelFromBasicInfo(framework);
             jdbc.update("""
                 UPDATE case_processing_pool SET processing_stage='PENDING_APPROVAL',similarity_result=?::jsonb,
-                       risk_score=?,recommended_risk_level=?,risk_breakdown=?::jsonb,last_error=NULL,
+                       risk_score=NULL,recommended_risk_level=?,risk_breakdown=NULL,last_error=NULL,
                        stage_completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE case_id=?
-                """, json.writeValueAsString(stored), rating.score(), rating.level(),
-                    json.writeValueAsString(rating.breakdown()), caseId);
+                """, json.writeValueAsString(stored), extractedRiskLevel, caseId);
             persistAlgorithmRanking(caseId, stored.path("matches"), operator);
             transitionAudit(caseId, from, "PENDING_APPROVAL", "MATCH_SIMILAR_CASES", operator, stored);
             jdbc.update("UPDATE cf_risk_case SET case_status='PENDING_APPROVAL',risk_level=NULL,updated_at=CURRENT_TIMESTAMP WHERE case_id=?", caseId);
@@ -253,14 +250,27 @@ public class CaseProcessingService {
                    stage_completed_at=CURRENT_TIMESTAMP,last_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE case_id=?
             """, caseId);
         jdbc.update("""
-            UPDATE cf_risk_case SET case_status='APPROVED',risk_level=?,risk_score=COALESCE(
-                (SELECT risk_score/100 FROM case_processing_pool WHERE case_id=?),risk_score),
+            UPDATE cf_risk_case SET case_status='APPROVED',risk_level=?,risk_score=NULL,
                 approver=?,updated_at=CURRENT_TIMESTAMP WHERE case_id=?
-            """, finalRiskLevel, caseId, operator, caseId);
+            """, finalRiskLevel, operator, caseId);
         jdbc.update("UPDATE structured_case_library SET status='ACTIVE',updated_at=CURRENT_TIMESTAMP WHERE case_id=?", caseId);
         transitionAudit(caseId, from, "APPROVED", "APPROVE", operator,
                 json.valueToTree(Map.of("finalRiskLevel", finalRiskLevel,
                         "orderedCaseIds", orderedCaseIds == null ? List.of() : orderedCaseIds)));
+    }
+
+    /** Default approval level comes only from final_case.basic_info.risk_level. */
+    static String riskLevelFromBasicInfo(JsonNode framework) {
+        if (framework == null || !framework.isObject()) return null;
+        String value = framework.path("basic_info").path("risk_level").asText("").trim();
+        String normalized = value.toUpperCase(java.util.Locale.ROOT).replaceAll("\\s+", "");
+        if (normalized.matches("^03(?:\\D.*)?$")
+                || List.of("高", "高风险", "HIGH").contains(normalized)) return "HIGH";
+        if (normalized.matches("^02(?:\\D.*)?$")
+                || List.of("中", "中风险", "中等风险", "重点可疑", "MEDIUM").contains(normalized)) return "MEDIUM";
+        if (normalized.matches("^01(?:\\D.*)?$")
+                || List.of("低", "低风险", "一般可疑", "LOW").contains(normalized)) return "LOW";
+        return null;
     }
 
     private JsonNode invokePipeline(Map<String,Object> pool, String targetStage) throws Exception {

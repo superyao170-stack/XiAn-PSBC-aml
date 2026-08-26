@@ -32,7 +32,7 @@
         <div class="detail-toolbar">
           <el-tag>{{ detail.caseId }}</el-tag><el-tag type="success">{{ sceneText(detail.scenarioCode) }}</el-tag>
           <template v-if="page.key==='approval'">
-            <span class="risk-label">系统建议</span><el-tag :type="riskType(detail.recommendedRiskLevel)">{{ riskText(detail.recommendedRiskLevel) }} · {{ detail.recommendedRiskScore ?? 0 }} 分</el-tag>
+            <span class="risk-label">基本信息风险等级</span><el-tag :type="riskType(detail.recommendedRiskLevel)">{{ riskText(detail.recommendedRiskLevel) }}</el-tag>
             <el-select v-model="finalRisk" placeholder="请选择最终风险等级"><el-option label="低风险" value="LOW"/><el-option label="中风险" value="MEDIUM"/><el-option label="高风险" value="HIGH"/></el-select>
             <el-button type="success" :loading="approving" @click="approve">审核通过</el-button>
           </template>
@@ -59,7 +59,6 @@
               <div v-if="page.key==='approval'"><el-button size="small" :disabled="index===0" @click="move(index,-1)">上移</el-button><el-button size="small" :disabled="index===orderedMatches.length-1" @click="move(index,1)">下移</el-button></div>
             </div>
           </el-tab-pane>
-          <el-tab-pane v-if="detail.riskBreakdown" label="评级依据" name="risk"><JsonPanel :value="detail.riskBreakdown" /></el-tab-pane>
         </el-tabs>
       </div>
     </el-dialog>
@@ -79,7 +78,7 @@ const configs:any={
   report:{title:'可疑报告',subtitle:'选择新增案例生成可疑报告，支持批量处理',stage:'PENDING_REPORT',action:'REPORT',button:'生成可疑报告'},
   framework:{title:'框架抽取',subtitle:'查看案例材料和可疑报告，并执行标准五层框架抽取',stage:'PENDING_EXTRACTION',action:'FRAMEWORK',button:'进行框架抽取'},
   similarity:{title:'相似案例',subtitle:'基于已审核案例库执行语义召回与图结构匹配',stage:'PENDING_SIMILARITY',action:'SIMILARITY',button:'进行相似匹配'},
-  approval:{title:'复核审批',subtitle:'复核可疑报告、抽取结果、相似排序和系统风险建议',stage:'PENDING_APPROVAL',action:null,button:''}
+  approval:{title:'复核审批',subtitle:'复核可疑报告、抽取结果、相似排序和基本信息风险等级',stage:'PENDING_APPROVAL',action:null,button:''}
 }
 const page=computed(()=>({...configs[String(route.meta.processingPage||'report')],key:String(route.meta.processingPage||'report')}))
 const loading=ref(false),processing=ref(false),records=ref<any[]>([]),selected=ref<any[]>([]),total=ref(0),pageNum=ref(1),pageSize=ref(10)
@@ -87,7 +86,7 @@ const filters=reactive({caseId:'',scenarioCode:''})
 const detailVisible=ref(false),detailLoading=ref(false),detail=ref<any>({}),activeTab=ref('basic'),reportText=ref(''),savingReport=ref(false),approving=ref(false),finalRisk=ref('')
 const basicSections=ref(['basic_info']),frameworkSections=ref(['basic_info']),orderedMatches=ref<any[]>([])
 const layerLabels=['案例基本信息','实体层','事件层','关系层','证据层']
-const sourceLabels:any={basic_info:'基本信息',customers:'客户',transaction_features:'交易特征',accounts:'账户',other_entities:'其他实体',devices:'设备',event_chain:'事件链'}
+const sourceLabels:any={basic_info:'基本信息',customers:'客户',transaction_features:'交易特征',accounts:'账户',other_entities:'其他实体',devices:'设备',event_chain:'事件链',text_analysis:'分析文本'}
 const extractionLabels:any={basic_info:'案例基本信息',customers:'客户',accounts:'账户',other_entities:'其他实体',events:'事件',relationships:'关系',evidences:'证据'}
 const sections=(value:any,labels:any)=>Object.entries(value||{}).filter(([key])=>labels[key]).map(([key,item]:any)=>({key,label:labels[key],value:item,count:Array.isArray(item)?item.length:(item&&typeof item==='object'?Object.keys(item).length:1)}))
 const sourceSections=computed(()=>sections(detail.value.sourcePayload,sourceLabels)),extractionSections=computed(()=>sections(detail.value.frameworkResult,extractionLabels))

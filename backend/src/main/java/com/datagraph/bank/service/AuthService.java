@@ -20,8 +20,10 @@ import java.util.*;
 @Service
 public class AuthService {
     private static final Set<String> RETAINED_MENU_PATHS = Set.of(
-            "/overview", "/analysis", "/analysis/aml", "/analysis/fraud", "/analysis/structured",
-            "/case", "/case/list", "/case/review", "/case/approval", "/case/graph",
+            "/overview", "/analysis/upload",
+            "/case", "/case/list", "/case/processing", "/case/processing/report",
+            "/case/processing/framework", "/case/processing/similarity",
+            "/case/processing/approval", "/case/graph",
             "/graph", "/graph/visualize", "/graph/hidden-risk", "/graph/association-clues",
             "/system", "/system/roles", "/system/menus");
 

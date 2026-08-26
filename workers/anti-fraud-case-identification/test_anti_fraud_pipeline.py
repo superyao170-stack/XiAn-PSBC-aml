@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import tempfile
 import threading
@@ -12,7 +13,7 @@ from aml_analysis_workflow.knowledge import KnowledgeBase
 from aml_analysis_workflow.models import CaseInput
 from aml_analysis_workflow.prompt_store import PromptStore
 from channel import CHANNELS
-from framework_extraction import RULE_PATH, load_case_directory, run_pipeline
+from framework_extraction import RULE_PATH, load_batch_case_file, load_case_directory, run_pipeline
 from fraud_analysis_workflow import (
     FRAUD_INITIAL_NODES,
     FraudAnalysisWorkflow,
@@ -71,9 +72,35 @@ class AntiFraudPipelineTests(unittest.TestCase):
                 {"发生时间": "2026-08-01 02:00:00", "类型": "规则命中", "具体内容": "命中公安涉案账户名单及FRD-1023多头分散转入规则"},
                 {"发生时间": "2026-08-01 02:05:00", "类型": "规则命中", "具体内容": "命中FRD-1031资金快进快出规则，转出比例90%"},
             ]
+        else:
+            values["text_analysis.json"] = {"text": "公安机关下发涉案账户线索，账户存在异常资金归集转出。"}
         for name, value in values.items():
             (root / name).write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
         return root
+
+    def _batch_csv(self, root: Path, mode: str, case_ids: tuple[str, ...]) -> Path:
+        fields = ["basic_info", "customers", "accounts", "devices"]
+        if mode == "NEW":
+            fields.append("event_chain")
+        else:
+            fields.append("text_analysis")
+        target = root / "cases.csv"
+        with target.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            for case_id in case_ids:
+                row = {
+                    "basic_info": {"case_id": case_id, "case_name": case_id, "case_trigger": "公安机关涉案账户名单下发"},
+                    "customers": [{"entity_id": f"CUS-{case_id}"}],
+                    "accounts": [{"entity_id": f"ACC-{case_id}"}],
+                    "devices": [{"device_id": f"DEV-{case_id}"}],
+                }
+                if mode == "NEW":
+                    row["event_chain"] = [{"类型": "规则命中", "具体内容": "命中FRD-1031资金快进快出规则"}]
+                else:
+                    row["text_analysis"] = {"text": "历史案例既有分析文本"}
+                writer.writerow({key: json.dumps(value, ensure_ascii=False) for key, value in row.items()})
+        return target
 
     def test_channel_field_is_inferred_and_direct_data_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -100,10 +127,33 @@ class AntiFraudPipelineTests(unittest.TestCase):
         self.assertGreaterEqual(result["riskEventCount"], 4)
         self.assertIn(result["channel"], CHANNELS)
 
-    def test_historical_contract_accepts_upload_without_text_analysis(self) -> None:
+    def test_historical_contract_loads_existing_text_analysis(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             record = load_case_directory(self._case(Path(directory), "HISTORICAL"), "HISTORICAL")
-        self.assertNotIn("text_analysis", record)
+        self.assertEqual("公安机关下发涉案账户线索，账户存在异常资金归集转出。", record["text_analysis"]["text"])
+
+    def test_new_batch_csv_validates_multiple_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = self._batch_csv(Path(directory), "NEW", ("FRD-B-001", "FRD-B-002"))
+            result = run_pipeline({
+                "sourcePath": str(source), "processingMode": "BATCH",
+                "recognitionMode": "NEW", "validateOnly": True,
+            })
+        self.assertEqual(2, result["caseCount"])
+        self.assertEqual(["FRD-B-001", "FRD-B-002"], result["caseIds"])
+
+    def test_historical_batch_uses_text_analysis_in_fifth_column(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = self._batch_csv(Path(directory), "HISTORICAL", ("FRD-H-001",))
+            records = load_batch_case_file(source, "HISTORICAL")
+        self.assertEqual([], records[0]["event_chain"])
+        self.assertEqual("历史案例既有分析文本", records[0]["text_analysis"]["text"])
+
+    def test_batch_rejects_duplicate_case_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = self._batch_csv(Path(directory), "NEW", ("FRD-DUP-001", "FRD-DUP-001"))
+            with self.assertRaisesRegex(ValueError, "重复 case_id"):
+                load_batch_case_file(source, "NEW")
 
     def test_fraud_fund_node_receives_risk_chain_facts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

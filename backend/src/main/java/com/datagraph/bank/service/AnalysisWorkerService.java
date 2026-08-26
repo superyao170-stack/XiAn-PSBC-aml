@@ -255,6 +255,9 @@ public class AnalysisWorkerService {
         if (!List.of("SINGLE", "BATCH").contains(mode)) {
             throw new IllegalStateException("处理方式必须是单案例或批处理");
         }
+        if (!List.of("NEW", "HISTORICAL").contains(recognitionMode)) {
+            throw new IllegalStateException("识别类型必须是新增案例识别或历史案例识别");
+        }
         Path uploadRoot = caseWorkerRoot.resolve("uploads").normalize();
         Path sourceDirectory = uploadRoot.resolve(token).normalize();
         if (!sourceDirectory.startsWith(uploadRoot) || !Files.isDirectory(sourceDirectory)) {
@@ -269,6 +272,12 @@ public class AnalysisWorkerService {
             if (required.stream().anyMatch(name -> !Files.isRegularFile(source.resolve(name)))) {
                 throw new IllegalStateException("单案例处理缺少必填 JSON 文件");
             }
+            if ("HISTORICAL".equals(recognitionMode)) {
+                String reportFile = antiFraud ? "text_analysis.json" : "analysis_texts.json";
+                if (!Files.isRegularFile(source.resolve(reportFile))) {
+                    throw new IllegalStateException("历史案例缺少已有分析文本文件 " + reportFile);
+                }
+            }
         } else {
             List<Path> candidates;
             try (var files = Files.list(sourceDirectory)) {
@@ -280,9 +289,6 @@ public class AnalysisWorkerService {
                 throw new IllegalStateException("批处理上传目录必须且只能包含一个 CSV/XLSX 文件");
             }
             source = candidates.get(0);
-        }
-        if (!List.of("NEW", "HISTORICAL").contains(recognitionMode)) {
-            throw new IllegalStateException("识别类型必须是新增案例识别或历史案例识别");
         }
         String newInputFile = antiFraud ? "event_chain.json" : null;
         if ("SINGLE".equals(mode) && antiFraud && "NEW".equals(recognitionMode)
@@ -314,7 +320,13 @@ public class AnalysisWorkerService {
             persistedCount++;
             if (result.isObject()) {
                 ((com.fasterxml.jackson.databind.node.ObjectNode) result).put("persisted", true);
-                ((com.fasterxml.jackson.databind.node.ObjectNode) result).put("workflowStatus", "DRAFT");
+                JsonNode completedFramework = result.path("extractionResult").path("data");
+                if (!completedFramework.isObject()) completedFramework = result.path("frameworkExtraction");
+                boolean historicalAutoApproved = "HISTORICAL".equals(recognitionMode)
+                        && CaseProcessingService.riskLevelFromBasicInfo(completedFramework) != null;
+                ((com.fasterxml.jackson.databind.node.ObjectNode) result).put("workflowStatus",
+                        historicalAutoApproved ? "APPROVED"
+                                : "HISTORICAL".equals(recognitionMode) ? "PENDING_APPROVAL" : "PENDING_REPORT");
             }
         }
         if (response.isObject()) {
@@ -339,9 +351,10 @@ public class AnalysisWorkerService {
         String scenario = value(job.get("scenario_code"), "AML");
         List<Map<String, Object>> rows = jdbc.queryForList("""
             SELECT l.case_id,l.case_document::text AS case_document
-              FROM structured_case_library l
+             FROM structured_case_library l
               JOIN cf_risk_case c ON c.case_id=l.case_id
-             WHERE l.bank_code=? AND l.scenario_code=? AND l.status='ACTIVE' AND c.deleted=false
+             WHERE l.bank_code=? AND l.scenario_code=? AND l.status='ACTIVE'
+               AND c.deleted=false AND c.case_status='APPROVED'
              ORDER BY l.case_id
             """, bank, scenario);
         Path snapshotRoot = caseWorkerRoot.resolve("runs")
@@ -377,6 +390,19 @@ public class AnalysisWorkerService {
                 "validateOnly", true), null, structuredCaseWorkerRoot, structuredCasePythonCommand);
         if ("FAILED".equals(response.path("status").asText())) {
             throw new IllegalArgumentException(response.path("error").asText("批处理文件校验失败"));
+        }
+        return objectMapper.convertValue(response, Map.class);
+    }
+
+    public Map<String, Object> validateAntiFraudCaseBatch(Path source, String recognitionMode) throws Exception {
+        JsonNode response = invokeStructuredCaseWorker(Map.of(
+                "sourcePath", source.toAbsolutePath().normalize().toString(),
+                "processingMode", "BATCH",
+                "recognitionMode", recognitionMode,
+                "pipelineBudgetSeconds", 60,
+                "validateOnly", true), null, antiFraudCaseWorkerRoot, antiFraudCasePythonCommand);
+        if ("FAILED".equals(response.path("status").asText())) {
+            throw new IllegalArgumentException(response.path("error").asText("反欺诈批处理文件校验失败"));
         }
         return objectMapper.convertValue(response, Map.class);
     }
@@ -452,6 +478,9 @@ public class AnalysisWorkerService {
             return persistUploadedStructuredCase(job, result, rawRecord);
         }
         JsonNode basic = framework.path("basic_info");
+        String recognitionMode = value(result.path("recognitionMode").asText(), "HISTORICAL")
+                .trim().toUpperCase();
+        boolean historical = "HISTORICAL".equals(recognitionMode);
         String caseId = truncate(value(result.path("caseId").asText(), basic.path("case_id").asText()), 64);
         if (caseId == null || caseId.isBlank()) throw new IllegalStateException("结构化案例结果缺少 caseId");
         String bank = String.valueOf(job.get("bank_code"));
@@ -465,13 +494,11 @@ public class AnalysisWorkerService {
         // case_description is base-case metadata. The suspicious report has its
         // own analysis_texts field and must never be used as a description fallback.
         String description = truncate(basic.path("case_description").asText(), 100_000);
-        String riskLevel = xiAnRiskLevel(basic.path("risk_level").asText());
-        BigDecimal riskScore = switch (riskLevel) {
-            case "CRITICAL" -> new BigDecimal("0.950000");
-            case "HIGH" -> new BigDecimal("0.850000");
-            case "MEDIUM" -> new BigDecimal("0.650000");
-            default -> new BigDecimal("0.350000");
-        };
+        String riskLevel = CaseProcessingService.riskLevelFromBasicInfo(framework);
+        boolean historicalAutoApproved = historical && riskLevel != null;
+        String caseStatus = historicalAutoApproved ? "APPROVED" : "PENDING_APPROVAL";
+        String automaticApprover = historicalAutoApproved ? "analysis-worker" : null;
+        BigDecimal riskScore = null;
         JsonNode snapshot = result.path("graphSnapshot");
         String snapshotHash = sha256(objectMapper.writeValueAsString(snapshot));
         String snapshotId = "GS-XI-" + sha256(caseId + "\u0000" + snapshotHash)
@@ -482,11 +509,12 @@ public class AnalysisWorkerService {
             (case_id,case_version,case_name,source_case_no,description,bank_code,workspace_id,
              scenario_code,case_source,case_type,case_status,risk_score,risk_level,subject_count,
              transaction_count,graph_snapshot_id,graph_snapshot_sha256,owner_analyst,
+             approver,
              struct_decision,decision_conflict,deleted,business_domain,business_case_type,
              trigger_point,reported_at,business_case_status,business_risk_level,suspected_crime_type,
              suspicious_transaction_feature_code,disposal_measure)
-            VALUES (?,1,?,?,?,?,?,?,'STRUCTURED_CASE','STRUCTURED_CASE','PENDING_APPROVAL',?,NULL,?,?,?,?,
-                    'analysis-worker','SUSPECTED',false,false,?,?,?,NULLIF(?,'')::timestamptz,?,?,?,?,?)
+            VALUES (?,1,?,?,?,?,?,?,'STRUCTURED_CASE','STRUCTURED_CASE',?,?,?,?,?,?,?,
+                    'analysis-worker',?,'SUSPECTED',false,false,?,?,?,NULLIF(?,'')::timestamptz,?,?,?,?,?)
             ON CONFLICT (case_id) DO UPDATE SET
               case_name=EXCLUDED.case_name,
               source_case_no=EXCLUDED.source_case_no,
@@ -495,8 +523,9 @@ public class AnalysisWorkerService {
               workspace_id=EXCLUDED.workspace_id,
               scenario_code=EXCLUDED.scenario_code,
               risk_score=EXCLUDED.risk_score,
-              case_status='PENDING_APPROVAL',
-              risk_level=NULL,
+              case_status=EXCLUDED.case_status,
+              risk_level=EXCLUDED.risk_level,
+              approver=EXCLUDED.approver,
               subject_count=EXCLUDED.subject_count,
               transaction_count=EXCLUDED.transaction_count,
               graph_snapshot_id=EXCLUDED.graph_snapshot_id,
@@ -512,9 +541,9 @@ public class AnalysisWorkerService {
               updated_at=CURRENT_TIMESTAMP,
               deleted=false
             """, caseId, caseName, caseId, description, bank, job.get("workspace_id"),
-                value(job.get("scenario_code"), "AML"), riskScore,
+                value(job.get("scenario_code"), "AML"), caseStatus, riskScore, riskLevel,
                 framework.path("customers").size(), framework.path("events").size(),
-                snapshotId, snapshotHash,
+                snapshotId, snapshotHash, automaticApprover,
                 normalizeStructuredBusinessDomain(basic.path("business_domain").asText(),
                         value(job.get("scenario_code"), "AML")),
                 truncate(basic.path("case_type").asText(), 64),
@@ -560,24 +589,30 @@ public class AnalysisWorkerService {
               content_sha256=EXCLUDED.content_sha256,
               status='ACTIVE',updated_at=CURRENT_TIMESTAMP
             """, caseId, bank, value(job.get("scenario_code"), "AML"),
-                value(result.path("recognitionMode").asText(), "NEW"),
+                recognitionMode,
                 frameworkJson, sha256(frameworkJson));
         jdbc.update("""
             INSERT INTO case_processing_pool
             (case_id,job_id,bank_code,scenario_code,recognition_mode,processing_stage,
-             source_payload,suspicious_report,framework_result,graph_snapshot,stage_completed_at)
-            VALUES (?,?,?,?,?,'PENDING_APPROVAL',?::jsonb,?::jsonb,?::jsonb,?::jsonb,CURRENT_TIMESTAMP)
+             source_payload,suspicious_report,framework_result,graph_snapshot,
+             recommended_risk_level,risk_score,risk_breakdown,stage_completed_at,approved_at)
+            VALUES (?,?,?,?,?,?,?::jsonb,?::jsonb,?::jsonb,?::jsonb,
+                    ?,NULL,NULL,CURRENT_TIMESTAMP,
+                    CASE WHEN ?='APPROVED' THEN CURRENT_TIMESTAMP ELSE NULL END)
             ON CONFLICT (case_id) DO UPDATE SET
               job_id=EXCLUDED.job_id,scenario_code=EXCLUDED.scenario_code,
-              recognition_mode=EXCLUDED.recognition_mode,processing_stage='PENDING_APPROVAL',
+              recognition_mode=EXCLUDED.recognition_mode,processing_stage=EXCLUDED.processing_stage,
               source_payload=EXCLUDED.source_payload,suspicious_report=EXCLUDED.suspicious_report,
               framework_result=EXCLUDED.framework_result,graph_snapshot=EXCLUDED.graph_snapshot,
+              recommended_risk_level=EXCLUDED.recommended_risk_level,
+              risk_score=NULL,risk_breakdown=NULL,
+              approved_at=EXCLUDED.approved_at,
               last_error=NULL,stage_completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
             """, caseId, job.get("job_id"), bank, value(job.get("scenario_code"), "AML"),
-                value(result.path("recognitionMode").asText(), "HISTORICAL"),
+                recognitionMode, caseStatus,
                 objectMapper.writeValueAsString(rawRecord.isObject() ? rawRecord : objectMapper.createObjectNode()),
                 objectMapper.writeValueAsString(result.path("suspiciousReport")), frameworkJson,
-                objectMapper.writeValueAsString(snapshot));
+                objectMapper.writeValueAsString(snapshot), riskLevel, caseStatus);
         recordCaseJobRelation(caseId, job);
         return true;
     }
@@ -666,14 +701,6 @@ public class AnalysisWorkerService {
                     riskScore, objectMapper.writeValueAsString(event), riskScore, riskLevel,
                     "XI_AN_CASE_FRAMEWORK_EXTRACTION", 1);
         }
-    }
-
-    private String xiAnRiskLevel(String raw) {
-        String normalized = value(raw, "").trim().toUpperCase();
-        if (normalized.contains("严重") || normalized.contains("CRITICAL")) return "CRITICAL";
-        if (normalized.contains("高") || normalized.contains("HIGH")) return "HIGH";
-        if (normalized.contains("中") || normalized.contains("MEDIUM")) return "MEDIUM";
-        return "LOW";
     }
 
     private String jsonScalarOrArray(JsonNode node) {

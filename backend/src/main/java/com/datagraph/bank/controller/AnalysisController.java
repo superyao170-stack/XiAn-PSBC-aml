@@ -241,8 +241,11 @@ public class AnalysisController {
         if (!List.of("NEW", "HISTORICAL").contains(resolvedRecognitionMode)) {
             return CommonResult.error(400, "案例来源必须是新增案例或历史案例");
         }
-        if (analysisTexts != null) {
-            return CommonResult.error(400, "案例上传阶段不接收 analysis_texts.json，可疑报告由后续流程生成");
+        if ("NEW".equals(resolvedRecognitionMode) && analysisTexts != null) {
+            return CommonResult.error(400, "新增案例不接收 analysis_texts.json，可疑报告由后续流程生成");
+        }
+        if ("HISTORICAL".equals(resolvedRecognitionMode) && analysisTexts == null) {
+            return CommonResult.error(400, "历史案例必须上传 analysis_texts.json，框架抽取将复用已有分析文本");
         }
         List<MultipartFile> supplied = java.util.stream.Stream.of(
                         basicInfo, customers, analysisTexts, accounts, otherEntities)
@@ -319,8 +322,11 @@ public class AnalysisController {
         if ("NEW".equals(mode) && eventChain == null) {
             return CommonResult.error(400, "新增反欺诈案例必须上传 event_chain.json");
         }
-        if (textAnalysis != null) {
-            return CommonResult.error(400, "案例上传阶段不接收 text_analysis.json，可疑报告由后端流程生成");
+        if ("HISTORICAL".equals(mode) && textAnalysis == null) {
+            return CommonResult.error(400, "历史反欺诈案例必须上传 text_analysis.json");
+        }
+        if ("NEW".equals(mode) && textAnalysis != null) {
+            return CommonResult.error(400, "新增反欺诈案例不接收 text_analysis.json，可疑报告由后续流程生成");
         }
         List<MultipartFile> supplied = java.util.stream.Stream.of(
                         basicInfo, customers, accounts, devices, eventChain, textAnalysis)
@@ -352,7 +358,8 @@ public class AnalysisController {
         saveStructuredCaseFile(target, "text_analysis.json", textAnalysis);
         List<String> fileNames = new java.util.ArrayList<>(List.of(
                 "basic_info.json", "customers.json", "accounts.json", "devices.json"));
-        fileNames.add("NEW".equals(mode) ? "event_chain.json" : "text_analysis.json");
+        if (eventChain != null) fileNames.add("event_chain.json");
+        if (textAnalysis != null) fileNames.add("text_analysis.json");
         return CommonResult.success(Map.of(
                 "uploadToken", token,
                 "fileName", String.join(" + ", fileNames),
@@ -403,6 +410,52 @@ public class AnalysisController {
             result.put("fileSize", file.getSize());
             result.put("processingMode", "BATCH");
             result.put("recognitionMode", mode);
+            return CommonResult.success(result);
+        } catch (Exception ex) {
+            Files.deleteIfExists(saved);
+            Files.deleteIfExists(target);
+            return CommonResult.error(400, ex.getMessage());
+        }
+    }
+
+    @PostMapping(value = "/anti-fraud-case-batch-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "上传批量反欺诈案例数据",
+            description = "上传一个 CSV/XLSX（最大 100MB）。NEW 第五列为 event_chain；HISTORICAL 第五列为 text_analysis。每个单元格为对应 JSON。",
+            tags = OpenApiConfig.STRUCTURED_CASE_TAG)
+    public CommonResult<Map<String, Object>> uploadAntiFraudCaseBatchFile(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam("recognitionMode") String recognitionMode) throws Exception {
+        String mode = recognitionMode == null ? "" : recognitionMode.trim().toUpperCase();
+        if (!List.of("NEW", "HISTORICAL").contains(mode)) {
+            return CommonResult.error(400, "案例来源必须是新增案例或历史案例");
+        }
+        String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
+        String lowerName = originalName.toLowerCase();
+        String suffix = lowerName.endsWith(".xlsx") ? ".xlsx" : lowerName.endsWith(".csv") ? ".csv" : "";
+        if (suffix.isBlank() || file.isEmpty()) {
+            return CommonResult.error(400, "反欺诈批处理必须上传非空的 .csv 或 .xlsx 文件");
+        }
+        if (file.getSize() > STRUCTURED_CASE_UPLOAD_LIMIT) {
+            return CommonResult.error(400, "反欺诈批处理文件不能超过100MB");
+        }
+        Path uploadRoot = antiFraudCaseWorkerRoot.resolve("uploads").normalize();
+        Files.createDirectories(uploadRoot);
+        String token = UUID.randomUUID().toString();
+        Path target = uploadRoot.resolve(token).normalize();
+        if (!target.startsWith(uploadRoot)) return CommonResult.error(400, "上传路径非法");
+        Files.createDirectory(target);
+        Path saved = target.resolve("cases" + suffix).normalize();
+        try {
+            Files.copy(file.getInputStream(), saved, StandardCopyOption.REPLACE_EXISTING);
+            Map<String, Object> validation = workerService.validateAntiFraudCaseBatch(saved, mode);
+            Map<String, Object> result = new java.util.LinkedHashMap<>(validation);
+            result.put("uploadToken", token);
+            result.put("fileName", originalName);
+            result.put("fileSize", file.getSize());
+            result.put("processingMode", "BATCH");
+            result.put("recognitionMode", mode);
+            result.put("workflow", "ANTI_FRAUD_CASE_PIPELINE");
             return CommonResult.success(result);
         } catch (Exception ex) {
             Files.deleteIfExists(saved);
@@ -493,6 +546,13 @@ public class AnalysisController {
                 JsonNode chain = JSON.readTree(eventChain.getInputStream());
                 if (chain == null || !chain.isArray() || chain.isEmpty()) {
                     return "event_chain.json 顶层必须是非空数组";
+                }
+            } else {
+                JsonNode analysis = JSON.readTree(textAnalysis.getInputStream());
+                if (analysis == null || !analysis.isObject()
+                        || (analysis.path("text").asText("").isBlank()
+                        && analysis.path("analysis_text").asText("").isBlank())) {
+                    return "text_analysis.json 必须包含非空 text 或 analysis_text";
                 }
             }
             return null;
@@ -660,7 +720,6 @@ public class AnalysisController {
             String mode = inputParamText(request.inputParams(), "processingMode").toUpperCase();
             String recognitionMode = inputParamText(request.inputParams(), "recognitionMode").toUpperCase();
             if (!token.matches("[0-9a-fA-F-]{36}")) return "结构化案例上传凭据无效";
-            if (antiFraud && !"SINGLE".equals(mode)) return "反欺诈场景当前仅支持单案例 JSON 输入";
             if (!List.of("SINGLE", "BATCH").contains(mode)) return "处理方式必须是单案例或批处理";
             Path caseWorkerRoot = antiFraud ? antiFraudCaseWorkerRoot : structuredCaseWorkerRoot;
             Path uploadRoot = caseWorkerRoot.resolve("uploads").normalize();
@@ -689,6 +748,14 @@ public class AnalysisController {
                         && !Files.isRegularFile(source.resolve("event_chain.json"))) {
                     return "新增反欺诈案例必须上传 event_chain.json";
                 }
+                if (antiFraud && "HISTORICAL".equals(recognitionMode)
+                        && !Files.isRegularFile(source.resolve("text_analysis.json"))) {
+                    return "历史反欺诈案例必须上传 text_analysis.json";
+                }
+                if (!antiFraud && "HISTORICAL".equals(recognitionMode)
+                        && !Files.isRegularFile(source.resolve("analysis_texts.json"))) {
+                    return "历史反洗钱案例必须上传 analysis_texts.json";
+                }
             }
             return null;
         }
@@ -698,7 +765,7 @@ public class AnalysisController {
     @GetMapping("/jobs/{jobId}")
     @Operation(
             summary = "5. 查询上传任务、失败明细与分步结果",
-            description = "轮询上传任务的校验、入库和历史案例自动框架抽取进度；失败时返回当前原因、阶段明细及历次重试记录。",
+            description = "轮询上传任务的校验、入库及历史案例框架抽取、basic_info.risk_level 自动定级和入图进度；缺少或无法识别风险等级的历史案例转入复核审批；失败时返回当前原因、阶段明细及历次重试记录。",
             tags = OpenApiConfig.STRUCTURED_CASE_TAG)
     public CommonResult<Map<String, Object>> detail(@PathVariable String jobId) {
         Map<String, Object> job = job(jobId);

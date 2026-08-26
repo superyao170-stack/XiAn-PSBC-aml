@@ -214,6 +214,7 @@ public class CaseCoreChainService {
         List<Map<String, Object>> edges = new ArrayList<>();
         List<Map<String, Object>> issues = new ArrayList<>();
         Set<String> nodeIds = new LinkedHashSet<>();
+        JsonNode structuredSnapshot = latestStructuredSnapshot(caseId);
         JsonNode workerOutput = latestWorkerOutput(caseId);
 
         String bankCode = Objects.toString(context.get("bank_code"));
@@ -238,8 +239,11 @@ public class CaseCoreChainService {
             addEdge(edges, caseId, "CASE", "INVESTIGATION_SCOPE", eventId, "EVENT",
                     "FACT", "SCOPE", "CASE_ANALYSIS_SCOPE", false);
         }
-        boolean hasWorkerEvidence = appendWorkerFacts(
-                caseId, workerOutput, events, nodes, nodeIds, edges);
+        boolean hasWorkerEvidence = structuredSnapshot.path("nodes").isArray()
+                && !structuredSnapshot.path("nodes").isEmpty()
+                ? appendStructuredSnapshotFacts(caseId, structuredSnapshot, events,
+                        nodes, nodeIds, edges)
+                : appendWorkerFacts(caseId, workerOutput, events, nodes, nodeIds, edges);
         appendEvidence(caseId, context, events, nodes, nodeIds, edges, hasWorkerEvidence);
         appendEventRelations(events, edges);
 
@@ -558,6 +562,162 @@ public class CaseCoreChainService {
     }
 
     /**
+     * Structured case pipelines persist a flat graph snapshot in
+     * case_processing_pool.  This is the authoritative graph for uploaded
+     * customers/accounts/entities and their extracted relationships.
+     */
+    @SuppressWarnings("unchecked")
+    boolean appendStructuredSnapshotFacts(
+            String caseId, JsonNode snapshot, List<Map<String, Object>> events,
+            List<Map<String, Object>> nodes, Set<String> nodeIds,
+            List<Map<String, Object>> edges) {
+        Map<String, String> idMap = new LinkedHashMap<>();
+        Map<String, String> eventByName = new LinkedHashMap<>();
+        events.forEach(event -> eventByName.put(
+                normalizeBusinessText(first(event, "event_name", "event_type", "event_id")),
+                text(event, "event_id")));
+        boolean[] hasEvidence = {false};
+
+        snapshot.path("nodes").forEach(item -> {
+            String rawId = item.path("id").asText("").trim();
+            String rawType = item.path("type").asText("").trim().toUpperCase();
+            if (rawId.isBlank()) return;
+            if ("CASE".equals(rawType)) {
+                idMap.put(rawId, caseId);
+                return;
+            }
+            if ("EVENT".equals(rawType)) {
+                String eventId = nodeIds.contains(rawId) ? rawId
+                        : eventByName.getOrDefault(
+                                normalizeBusinessText(item.path("label").asText()), "");
+                if (!eventId.isBlank()) idMap.put(rawId, eventId);
+                return;
+            }
+
+            Map<String, Object> properties = item.path("properties").isObject()
+                    ? mapper.convertValue(item.path("properties"), LinkedHashMap.class)
+                    : new LinkedHashMap<>();
+            String canonicalType = structuredCanonicalType(rawType, rawId,
+                    item.path("label").asText(), properties);
+            if (canonicalType.isBlank()) return;
+            String name = fallback(item.path("label").asText(),
+                    first(properties, "customer_name", "account_number", "entity_attr_1", "entity_id"));
+            properties.put("source", "STRUCTURED_GRAPH_SNAPSHOT");
+            properties.put("sourceNodeType", rawType);
+            addNode(nodes, nodeIds, rawId, canonicalType, canonicalType, "FACT",
+                    name, withCommon(properties, canonicalType, "OBSERVED"));
+            if (nodeIds.contains(rawId)) idMap.put(rawId, rawId);
+            if ("EVIDENCE".equals(canonicalType)) hasEvidence[0] = true;
+        });
+
+        snapshot.path("edges").forEach(item -> {
+            String source = idMap.getOrDefault(item.path("source").asText(), "");
+            String target = idMap.getOrDefault(item.path("target").asText(), "");
+            if (source.isBlank() || target.isBlank()) return;
+            String sourceType = canonicalTypeForId(nodes, source);
+            String targetType = canonicalTypeForId(nodes, target);
+            SnapshotRelation mapped = structuredRelation(
+                    item.path("type").asText(), sourceType, targetType);
+            if (mapped == null) return;
+            if (mapped.reverse()) {
+                String swappedId = source; source = target; target = swappedId;
+                String swappedType = sourceType; sourceType = targetType; targetType = swappedType;
+            }
+            String relation = mapped.type();
+            String resolvedSource = source;
+            String resolvedTarget = target;
+            Map<String, Object> existingProperties = edges.stream()
+                    .filter(edge -> resolvedSource.equals(Objects.toString(edge.get("source"), ""))
+                            && resolvedTarget.equals(Objects.toString(edge.get("target"), ""))
+                            && relation.equals(Objects.toString(edge.get("type"), "")))
+                    .map(edge -> (Map<String, Object>) edge.get("properties"))
+                    .findFirst().orElse(null);
+            if (existingProperties != null) {
+                existingProperties.put("sourceRelationshipType", item.path("type").asText());
+                existingProperties.put("sourceRelationshipId", item.path("id").asText());
+                return;
+            }
+            addEdge(edges, source, sourceType, relation, target, targetType,
+                    "FACT", "CONTEXT", "STRUCTURED_GRAPH_SNAPSHOT", false);
+            Map<String, Object> edgeProperties =
+                    (Map<String, Object>) edges.get(edges.size() - 1).get("properties");
+            edgeProperties.put("sourceRelationshipType", item.path("type").asText());
+            edgeProperties.put("sourceRelationshipId", item.path("id").asText());
+            if (item.path("properties").isObject()) {
+                edgeProperties.put("sourceProperties",
+                        mapper.convertValue(item.path("properties"), LinkedHashMap.class));
+            }
+        });
+        return hasEvidence[0];
+    }
+
+    private String structuredCanonicalType(String rawType, String id, String label,
+                                           Map<String, Object> properties) {
+        if (Set.of("CUSTOMER", "ACCOUNT", "EVIDENCE", "DEVICE", "WALLET",
+                "ADDRESS", "IP_ADDRESS", "MERCHANT", "ORGANIZATION").contains(rawType)) {
+            return rawType;
+        }
+        if (!"ENTITY".equals(rawType)) return "";
+        String hint = (id + " " + label + " " + first(properties,
+                "entity_type", "entity_attr_2", "entity_attr_3")).toUpperCase();
+        if (id.toUpperCase().startsWith("PER") || hint.contains("个人")
+                || hint.contains("自然人")) return "CUSTOMER";
+        if (id.toUpperCase().startsWith("MER") || hint.contains("商户")) return "MERCHANT";
+        if (id.toUpperCase().startsWith("DEV") || hint.contains("设备")) return "DEVICE";
+        if (hint.contains("IP")) return "IP_ADDRESS";
+        if (hint.contains("地址")) return "ADDRESS";
+        if (hint.contains("钱包")) return "WALLET";
+        return "ORGANIZATION";
+    }
+
+    private SnapshotRelation structuredRelation(String rawRelation,
+                                                  String sourceType, String targetType) {
+        boolean sourceSubject = Set.of("CUSTOMER", "ORGANIZATION", "MERCHANT").contains(sourceType);
+        boolean targetSubject = Set.of("CUSTOMER", "ORGANIZATION", "MERCHANT").contains(targetType);
+        return switch (rawRelation == null ? "" : rawRelation.trim()) {
+            case "包含关系" -> "CASE".equals(sourceType) && "EVENT".equals(targetType)
+                    ? new SnapshotRelation("INVESTIGATION_SCOPE", false) : null;
+            case "持有关系" -> sourceSubject && "ACCOUNT".equals(targetType)
+                    ? new SnapshotRelation("OWNS_ACCOUNT", false) : null;
+            case "参与关系" -> sourceSubject && "EVENT".equals(targetType)
+                    ? new SnapshotRelation("ACTOR", true)
+                    : "EVENT".equals(sourceType) && targetSubject
+                            ? new SnapshotRelation("ACTOR", false) : null;
+            case "涉及关系" -> {
+                if ("CASE".equals(sourceType) && targetSubject)
+                    yield new SnapshotRelation("INVOLVES_SUBJECT", false);
+                if ("CASE".equals(sourceType) && Set.of("ACCOUNT", "WALLET").contains(targetType))
+                    yield new SnapshotRelation("INVOLVES_ASSET", false);
+                if ("CASE".equals(sourceType)
+                        && Set.of("DEVICE", "IP_ADDRESS", "ADDRESS").contains(targetType))
+                    yield new SnapshotRelation("INVOLVES_ENVIRONMENT", false);
+                if (sourceSubject && "EVENT".equals(targetType))
+                    yield new SnapshotRelation("SUBJECT", true);
+                if ("EVENT".equals(sourceType) && targetSubject)
+                    yield new SnapshotRelation("SUBJECT", false);
+                if ("ACCOUNT".equals(sourceType) && "EVENT".equals(targetType))
+                    yield new SnapshotRelation("SUBJECT_ACCOUNT", true);
+                if ("EVENT".equals(sourceType) && "ACCOUNT".equals(targetType))
+                    yield new SnapshotRelation("SUBJECT_ACCOUNT", false);
+                yield null;
+            }
+            case "顺承关系" -> "EVENT".equals(sourceType) && "EVENT".equals(targetType)
+                    ? new SnapshotRelation("PRECEDES", false) : null;
+            case "上下位关系", "应对关系" ->
+                    Set.of("CASE", "CUSTOMER", "EVENT", "EVIDENCE").contains(sourceType)
+                            && Set.of("CASE", "CUSTOMER", "EVENT", "EVIDENCE").contains(targetType)
+                    ? new SnapshotRelation("ASSOCIATED_WITH", false) : null;
+            case "社会关系" -> "CUSTOMER".equals(sourceType) && "CUSTOMER".equals(targetType)
+                    ? new SnapshotRelation("ASSOCIATED_WITH", false) : null;
+            case "来源关系" -> "EVIDENCE".equals(sourceType) && "EVIDENCE".equals(targetType)
+                    ? new SnapshotRelation("DERIVED_FROM_SOURCE", false) : null;
+            default -> null;
+        };
+    }
+
+    private record SnapshotRelation(String type, boolean reverse) {}
+
+    /**
      * Uses the same unstructured-worker facts as the Evidence, Customer and
      * Account model tabs.  The core-chain snapshot must not invent a second,
      * reduced view of the case facts.
@@ -803,6 +963,21 @@ public class CaseCoreChainService {
             JsonNode worker = root.has("workerResult") ? root.path("workerResult") : root;
             JsonNode output = worker.path("final").path("output");
             return output.path("nodes").isObject() ? output : worker;
+        } catch (Exception ignored) {
+            return mapper.createObjectNode();
+        }
+    }
+
+    private JsonNode latestStructuredSnapshot(String caseId) {
+        try {
+            List<String> rows = jdbc.queryForList("""
+                SELECT graph_snapshot::text
+                  FROM case_processing_pool
+                 WHERE case_id=? AND graph_snapshot IS NOT NULL
+                   AND jsonb_typeof(graph_snapshot->'nodes')='array'
+                 LIMIT 1
+                """, String.class, caseId);
+            return rows.isEmpty() ? mapper.createObjectNode() : mapper.readTree(rows.get(0));
         } catch (Exception ignored) {
             return mapper.createObjectNode();
         }

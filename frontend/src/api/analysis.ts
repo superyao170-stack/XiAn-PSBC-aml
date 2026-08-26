@@ -59,6 +59,15 @@ export const uploadStructuredCaseBatchFileApi = (file: File, recognitionMode: 'N
     timeout: 120000
   })
 }
+export const uploadAntiFraudCaseBatchFileApi = (file: File, recognitionMode: 'NEW' | 'HISTORICAL') => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('recognitionMode', recognitionMode)
+  return request.post('/api/v1/analysis/anti-fraud-case-batch-file', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000
+  })
+}
 export const startAnalysisJobApi = (jobId: string) =>
   request.put(`/api/v1/analysis/jobs/${jobId}/start`)
 export const updateAnalysisStepApi = (jobId: string, stepOrder: number, data: Record<string, unknown>) =>

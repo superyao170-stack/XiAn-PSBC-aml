@@ -8,11 +8,13 @@ chain, then use the retained aml-analysis-workflow with fraud prompts.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import os
 import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
@@ -115,6 +117,8 @@ def load_case_directory(source: Path, recognition_mode: str) -> dict[str, Any]:
 
     event_chain = _read_json(source / "event_chain.json", list, required=False)
     text_analysis = _read_json(source / "text_analysis.json", dict, required=False)
+    if recognition_mode == "HISTORICAL" and text_analysis is None:
+        raise ValueError("历史反欺诈案例必须包含 text_analysis.json")
     if text_analysis is not None and not str(
         text_analysis.get("text") or text_analysis.get("analysis_text") or ""
     ).strip():
@@ -139,8 +143,114 @@ def load_case_directory(source: Path, recognition_mode: str) -> dict[str, Any]:
     return record
 
 
+def _decode_batch_cell(value: Any, field: str, row_number: int) -> Any:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError(f"第 {row_number} 行 {field} 不能为空")
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"第 {row_number} 行 {field} 不是有效 JSON: {exc.msg}") from exc
+
+
+def _batch_record(values: dict[str, Any], row_number: int, recognition_mode: str) -> dict[str, Any]:
+    basic = _decode_batch_cell(values.get("basic_info"), "basic_info", row_number)
+    customers = _decode_batch_cell(values.get("customers"), "customers", row_number)
+    accounts = _decode_batch_cell(values.get("accounts"), "accounts", row_number)
+    devices = _decode_batch_cell(values.get("devices"), "devices", row_number)
+    event_chain = (
+        _decode_batch_cell(values.get("event_chain"), "event_chain", row_number)
+        if recognition_mode == "NEW" else []
+    )
+    text_analysis = (
+        _decode_batch_cell(values.get("text_analysis"), "text_analysis", row_number)
+        if recognition_mode == "HISTORICAL" else None
+    )
+    if not isinstance(basic, dict) or not str(basic.get("case_id") or "").strip():
+        raise ValueError(f"第 {row_number} 行 basic_info 必须是包含非空 case_id 的 JSON 对象")
+    if not isinstance(customers, list) or not customers:
+        raise ValueError(f"第 {row_number} 行 customers 必须是非空 JSON 数组")
+    if any(not isinstance(item, dict) or not str(item.get("entity_id") or "").strip() for item in customers):
+        raise ValueError(f"第 {row_number} 行 customers 每项必须包含非空 entity_id")
+    if not isinstance(accounts, list):
+        raise ValueError(f"第 {row_number} 行 accounts 必须是 JSON 数组")
+    if any(not isinstance(item, dict) or not str(item.get("entity_id") or "").strip() for item in accounts):
+        raise ValueError(f"第 {row_number} 行 accounts 每项必须包含非空 entity_id")
+    if not isinstance(devices, list):
+        raise ValueError(f"第 {row_number} 行 devices 必须是 JSON 数组")
+    _normalize_devices(devices)
+    if recognition_mode == "NEW" and (not isinstance(event_chain, list) or not event_chain):
+        raise ValueError(f"第 {row_number} 行 event_chain 必须是非空 JSON 数组")
+    if recognition_mode == "HISTORICAL" and (
+        not isinstance(text_analysis, dict)
+        or not str(text_analysis.get("text") or text_analysis.get("analysis_text") or "").strip()
+    ):
+        raise ValueError(f"第 {row_number} 行 text_analysis 必须是包含非空 text 或 analysis_text 的 JSON 对象")
+    channel = infer_channel(basic, event_chain)
+    normalized_basic = dict(basic)
+    normalized_basic["渠道"] = channel
+    normalized_basic["channel"] = channel
+    record = {
+        "basic_info": normalized_basic,
+        "customers": customers,
+        "accounts": accounts,
+        "devices": devices,
+        "other_entities": _normalize_devices(devices),
+        "event_chain": event_chain,
+    }
+    if text_analysis is not None:
+        record["text_analysis"] = text_analysis
+    return record
+
+
+def load_batch_case_file(source: Path, recognition_mode: str) -> list[dict[str, Any]]:
+    expected = (
+        ("basic_info", "customers", "accounts", "devices", "event_chain")
+        if recognition_mode == "NEW"
+        else ("basic_info", "customers", "accounts", "devices", "text_analysis")
+    )
+    rows: list[dict[str, Any]] = []
+    suffix = source.suffix.lower()
+    if suffix == ".csv":
+        with source.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            headers = tuple(reader.fieldnames or ())
+            if headers != expected:
+                raise ValueError("CSV 表头必须严格为: " + ", ".join(expected))
+            rows = [dict(row) for row in reader]
+    elif suffix == ".xlsx":
+        try:
+            from openpyxl import load_workbook
+        except ImportError as exc:
+            raise ValueError("XLSX 批处理需要安装 openpyxl") from exc
+        workbook = load_workbook(source, read_only=True, data_only=True)
+        try:
+            sheet = workbook.active
+            values = sheet.iter_rows(values_only=True)
+            headers = tuple(str(value or "").strip() for value in next(values, ()))
+            if headers != expected:
+                raise ValueError("XLSX 表头必须严格为: " + ", ".join(expected))
+            rows = [dict(zip(headers, row)) for row in values if any(value not in (None, "") for value in row)]
+        finally:
+            workbook.close()
+    else:
+        raise ValueError("反欺诈批处理仅支持 CSV 或 XLSX 文件")
+    if not rows:
+        raise ValueError("批处理文件至少需要一条案例数据")
+    records = [_batch_record(row, index, recognition_mode) for index, row in enumerate(rows, start=2)]
+    case_ids = [str(record["basic_info"]["case_id"]).strip() for record in records]
+    duplicates = sorted({case_id for case_id in case_ids if case_ids.count(case_id) > 1})
+    if duplicates:
+        raise ValueError("批处理存在重复 case_id: " + ", ".join(duplicates))
+    return records
+
+
 def _source_sha256(source: Path) -> str:
     digest = hashlib.sha256()
+    if source.is_file():
+        digest.update(source.read_bytes())
+        return digest.hexdigest()
     for path in sorted(source.glob("*.json"), key=lambda item: item.name):
         digest.update(path.name.encode("utf-8"))
         digest.update(b"\0")
@@ -247,12 +357,60 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
     mode = str(request.get("processingMode") or "SINGLE").upper()
     recognition_mode = str(request.get("recognitionMode") or "").upper()
     target_stage = str(request.get("targetStage") or "SIMILARITY").upper()
-    if mode != "SINGLE":
-        raise ValueError("反欺诈场景当前使用分角色 JSON 单案例输入")
     if recognition_mode not in {"NEW", "HISTORICAL"}:
         raise ValueError("识别类型必须是 NEW 或 HISTORICAL")
     if target_stage not in {"UPLOAD", "REPORT", "FRAMEWORK", "SIMILARITY"}:
         raise ValueError("targetStage 必须是 UPLOAD、REPORT、FRAMEWORK 或 SIMILARITY")
+    if mode == "BATCH":
+        records = load_batch_case_file(source, recognition_mode)
+        source_sha = _source_sha256(source)
+        if request.get("validateOnly"):
+            return {
+                "status": "SUCCEEDED", "workflow": WORKFLOW_ID,
+                "processingMode": mode, "recognitionMode": recognition_mode,
+                "caseCount": len(records),
+                "caseIds": [str(record["basic_info"]["case_id"]) for record in records],
+                "sourceSha256": source_sha,
+            }
+        batch_results: list[dict[str, Any]] = []
+        temp_parent = WORKER_ROOT / "runs"
+        temp_parent.mkdir(parents=True, exist_ok=True)
+        for index, record in enumerate(records, start=1):
+            with tempfile.TemporaryDirectory(prefix="fraud-batch-", dir=temp_parent) as directory:
+                case_root = Path(directory)
+                for name, key in (
+                    ("basic_info.json", "basic_info"), ("customers.json", "customers"),
+                    ("accounts.json", "accounts"), ("devices.json", "devices"),
+                ):
+                    (case_root / name).write_text(
+                        json.dumps(record[key], ensure_ascii=False), encoding="utf-8")
+                if recognition_mode == "NEW":
+                    (case_root / "event_chain.json").write_text(
+                        json.dumps(record["event_chain"], ensure_ascii=False), encoding="utf-8")
+                else:
+                    (case_root / "text_analysis.json").write_text(
+                        json.dumps(record["text_analysis"], ensure_ascii=False), encoding="utf-8")
+                child_request = dict(request)
+                child_request.update({
+                    "sourcePath": str(case_root), "processingMode": "SINGLE",
+                    "jobId": f"{request.get('jobId') or 'BATCH'}-{index}", "validateOnly": False,
+                })
+                child = run_pipeline(child_request)
+                result = child["results"][0]
+                batch_results.append(result)
+                if case_completed is not None:
+                    case_completed(result, len(batch_results), len(records))
+        return {
+            "status": "SUCCEEDED", "workerId": WORKER_ID, "workerVersion": WORKER_VERSION,
+            "workflow": WORKFLOW_ID, "jobId": request.get("jobId"),
+            "processingMode": mode, "recognitionMode": recognition_mode,
+            "targetStage": target_stage, "caseCount": len(batch_results),
+            "sourceSha256": source_sha, "results": batch_results,
+            "performance": {"totalSeconds": round(perf_counter() - started, 3)},
+            "completedAt": datetime.now(timezone.utc).isoformat(),
+        }
+    if mode != "SINGLE":
+        raise ValueError("processingMode 必须是 SINGLE 或 BATCH")
     record = load_case_directory(source, recognition_mode)
     rule_engine = FraudRuleEngine(RULE_PATH)
     risk_chain = (

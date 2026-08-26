@@ -38,14 +38,14 @@ class BatchInputTests(unittest.TestCase):
                 writer.writerow({key: json.dumps(value, ensure_ascii=False) for key, value in row.items()})
         return path
 
-    def test_historical_csv_uses_the_upload_contract_without_a_report(self) -> None:
+    def test_historical_csv_reuses_existing_analysis_texts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = self._write_csv(directory, "history.csv", (
-                "basic_info", "customers", "transaction_features"
+                "basic_info", "customers", "analysis_texts"
             ), [{
                 "basic_info": _basic("CASE-H-1"),
                 "customers": _customers("H-1"),
-                "transaction_features": {"case_id": "CASE-H-1", "features": []},
+                "analysis_texts": {"analysis_text1": "已有历史可疑报告"},
             }])
 
             records = load_batch_case_file(source, "HISTORICAL")
@@ -56,11 +56,11 @@ class BatchInputTests(unittest.TestCase):
                 "validateOnly": True,
             })
 
-            self.assertEqual("CASE-H-1", records[0]["transaction_features"]["case_id"])
+            self.assertEqual("已有历史可疑报告", records[0]["analysis_texts"]["analysis_text1"])
             self.assertEqual(1, validation["caseCount"])
             self.assertEqual(["CASE-H-1"], validation["caseIds"])
 
-    def test_historical_csv_rejects_legacy_report_columns(self) -> None:
+    def test_historical_csv_accepts_legacy_analysis_text_alias(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = self._write_csv(directory, "history.csv", (
                 "basic_info", "customers", "analysis_text"
@@ -70,7 +70,36 @@ class BatchInputTests(unittest.TestCase):
                 "analysis_text": "已有单字段可疑报告",
             }])
 
-            with self.assertRaisesRegex(ValueError, "transaction_features"):
+            records = load_batch_case_file(source, "HISTORICAL")
+
+            self.assertEqual("已有单字段可疑报告", records[0]["analysis_texts"]["analysis_text"])
+
+    def test_historical_csv_rejects_new_case_transaction_features_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = self._write_csv(directory, "history.csv", (
+                "basic_info", "customers", "transaction_features"
+            ), [{
+                "basic_info": _basic("CASE-H-3"),
+                "customers": _customers("H-3"),
+                "transaction_features": {"case_id": "CASE-H-3"},
+            }])
+
+            with self.assertRaisesRegex(ValueError, "analysis_texts"):
+                load_batch_case_file(source, "HISTORICAL")
+
+    def test_aml_upload_reports_anti_fraud_scenario_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = self._write_csv(directory, "history.csv", (
+                "basic_info", "customers", "accounts", "devices", "text_analysis"
+            ), [{
+                "basic_info": _basic("FRD-H-1"),
+                "customers": _customers("FRD-H-1"),
+                "accounts": [],
+                "devices": [],
+                "text_analysis": {"text": "历史反欺诈报告"},
+            }])
+
+            with self.assertRaisesRegex(ValueError, "切换为反欺诈"):
                 load_batch_case_file(source, "HISTORICAL")
 
     def test_new_csv_requires_transaction_features_and_rejects_duplicate_case_ids(self) -> None:

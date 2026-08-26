@@ -201,6 +201,39 @@ class CaseControllerTest {
         assertEquals("EXISTING_ANALYSIS_TEXT", report.get("source"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void structuredDetailUsesCanonicalPostgresFinalCase() {
+        when(jdbcTemplate.queryForList(
+                contains("FROM structured_case_library l"), eq("CASE-1")))
+                .thenReturn(List.of(Map.of(
+                        "recognitionMode", "HISTORICAL",
+                        "caseDocument", """
+                            {"basic_info":{"case_id":"CASE-1"},
+                             "customers":[{"entity_id":"CUST-1"},{"entity_id":"CUST-2"}],
+                             "accounts":[{"entity_id":"ACC-1"}],
+                             "other_entities":[{"entity_id":"ORG-1"}],
+                             "events":[{"event_id":"0000001"}],
+                             "relationships":[{"relationship_id":"0000001"}],
+                             "analysis_texts":{"analysis_text1":"历史报告"}}
+                            """,
+                        "suspiciousReport", "{}",
+                        "graphSnapshot", "{\"nodeCount\":6}",
+                        "jobId", "JOB-1")));
+
+        Map<String,Object> response = controller.loadCanonicalStructuredWorkerResult("CASE-1");
+
+        assertEquals("POSTGRESQL_FINAL_CASE", response.get("source"));
+        Map<String,Object> worker = (Map<String,Object>) response.get("workerResult");
+        Map<String,Object> result = (Map<String,Object>) ((List<?>) worker.get("results")).get(0);
+        Map<String,Object> extraction = (Map<String,Object>) result.get("extractionResult");
+        Map<String,Object> framework = (Map<String,Object>) extraction.get("data");
+        assertEquals(2, ((List<?>) framework.get("customers")).size());
+        assertEquals(1, ((List<?>) framework.get("accounts")).size());
+        assertEquals(1, ((List<?>) framework.get("other_entities")).size());
+        assertEquals(1, ((List<?>) framework.get("relationships")).size());
+    }
+
     private CfRiskCase caseWithStatus(String status) {
         CfRiskCase riskCase = new CfRiskCase();
         riskCase.setId(1L);

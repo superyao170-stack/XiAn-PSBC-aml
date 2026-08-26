@@ -55,9 +55,38 @@ from text_generation import ensure_analysis_text  # noqa: E402
 WORKER_ID = "XI_AN_STRUCTURED_CASE_PIPELINE"
 WORKER_VERSION = "2.8.0-bge-m3-event-rag"
 NEW_BATCH_FIELDS = ("basic_info", "customers", "transaction_features")
-HISTORICAL_BATCH_FIELDS = NEW_BATCH_FIELDS
-HISTORICAL_BATCH_FIELD_ALIASES = (HISTORICAL_BATCH_FIELDS,)
+HISTORICAL_BATCH_FIELDS = ("basic_info", "customers", "analysis_texts")
+HISTORICAL_BATCH_FIELD_ALIASES = (
+    HISTORICAL_BATCH_FIELDS,
+    ("basic_info", "customers", "analysis_text"),
+)
 MAX_BATCH_CASES = 500
+ANTI_FRAUD_NEW_BATCH_FIELDS = (
+    "basic_info", "customers", "accounts", "devices", "event_chain"
+)
+ANTI_FRAUD_HISTORICAL_BATCH_FIELDS = (
+    "basic_info", "customers", "accounts", "devices", "text_analysis"
+)
+
+
+def _batch_header_error(headers: tuple[str, ...], recognition_mode: str) -> str:
+    expected = (
+        HISTORICAL_BATCH_FIELDS
+        if recognition_mode == "HISTORICAL"
+        else NEW_BATCH_FIELDS
+    )
+    if recognition_mode == "HISTORICAL" and headers == NEW_BATCH_FIELDS:
+        return (
+            "历史反洗钱案例必须提供已有分析文本 analysis_texts，"
+            "不能使用新增案例字段 transaction_features；CSV/XLSX 表头必须严格为: "
+            + ", ".join(expected)
+        )
+    if headers in {ANTI_FRAUD_NEW_BATCH_FIELDS, ANTI_FRAUD_HISTORICAL_BATCH_FIELDS}:
+        return (
+            "当前选择的是反洗钱场景，但文件表头属于反欺诈案例；"
+            "请将处理场景切换为反欺诈"
+        )
+    return "CSV/XLSX 表头必须严格为: " + ", ".join(expected)
 
 
 def _read_json(source: Path, expected_type: type, required: bool) -> Any:
@@ -164,15 +193,18 @@ def _batch_record(values: dict[str, Any], source: str, recognition_mode: str) ->
         "accounts": [],
         "other_entities": [],
     }
-    transaction_features = _decode_batch_json(
-        values.get("transaction_features"), "transaction_features", source, dict
-    )
-    feature_case_id = str(transaction_features.get("case_id") or "").strip()
-    if feature_case_id and feature_case_id != case_id:
-        raise ValueError(
-            f"{source} 的 transaction_features.case_id 与 basic_info.case_id 不一致"
+    if recognition_mode == "HISTORICAL":
+        record["analysis_texts"] = _decode_batch_analysis_texts(values, source)
+    else:
+        transaction_features = _decode_batch_json(
+            values.get("transaction_features"), "transaction_features", source, dict
         )
-    record["transaction_features"] = transaction_features
+        feature_case_id = str(transaction_features.get("case_id") or "").strip()
+        if feature_case_id and feature_case_id != case_id:
+            raise ValueError(
+                f"{source} 的 transaction_features.case_id 与 basic_info.case_id 不一致"
+            )
+        record["transaction_features"] = transaction_features
     return record
 
 
@@ -192,7 +224,7 @@ def load_batch_case_file(source: Path, recognition_mode: str) -> list[dict[str, 
                 else headers == expected_fields
             )
             if not valid_headers:
-                raise ValueError("CSV 表头必须严格为: " + ", ".join(expected_fields))
+                raise ValueError(_batch_header_error(headers, recognition_mode))
             for row_number, row in enumerate(reader, start=2):
                 if row.get(None):
                     raise ValueError(f"CSV 第 {row_number} 行字段数超过表头")
@@ -217,7 +249,7 @@ def load_batch_case_file(source: Path, recognition_mode: str) -> list[dict[str, 
                 else headers == expected_fields
             )
             if not valid_headers:
-                raise ValueError("XLSX 表头必须严格为: " + ", ".join(expected_fields))
+                raise ValueError(_batch_header_error(headers, recognition_mode))
             for row_number, cells in enumerate(iterator, start=2):
                 if any(cell.data_type == "f" for cell in cells):
                     raise ValueError(f"XLSX 第 {row_number} 行不允许使用公式")

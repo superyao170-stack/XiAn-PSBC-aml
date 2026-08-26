@@ -88,16 +88,16 @@
               <el-radio-button value="HISTORICAL">历史案例</el-radio-button>
               <el-radio-button value="NEW">新增案例</el-radio-button>
             </el-radio-group>
-            <div class="batch-hint">历史案例上传后自动完成框架抽取；新增案例进入可疑报告处理队列。</div>
+            <div class="batch-hint">历史案例抽取后按基本信息中的风险等级定级并进入全景图谱；缺少或无法识别风险等级时转入复核审批。新增案例进入可疑报告处理队列。</div>
           </el-form-item>
-          <el-form-item v-if="!isAntiFraud" label="处理方式" required>
-            <el-radio-group v-model="structuredCaseMode">
+          <el-form-item label="处理方式" required>
+            <el-radio-group v-model="structuredCaseMode" @change="changeStructuredCaseMode">
               <el-radio-button value="SINGLE">单案例处理</el-radio-button>
               <el-radio-button value="BATCH">批处理</el-radio-button>
             </el-radio-group>
             <div class="batch-hint">单案例使用分角色 JSON 文件；批处理使用 CSV/XLSX，一行对应一个案例。</div>
           </el-form-item>
-          <el-alert v-else type="info" :closable="false" title="反欺诈使用账户、客户、设备、案例四类直映射 JSON；事件和关系由 Worker 抽取。" />
+          <el-alert v-if="isAntiFraud && structuredCaseMode==='SINGLE'" type="info" :closable="false" title="反欺诈使用基础信息、客户、账户、设备四类直映射 JSON；新增案例另含事件链。" />
           <template v-if="structuredCaseMode === 'SINGLE'">
           <el-form-item label="基本信息" required>
             <input type="file" accept=".json,application/json" @change="selectStructuredCaseFile('basicInfo', $event)" />
@@ -114,9 +114,19 @@
             <div v-if="structuredCaseFiles.eventChain" class="selected-file"><el-tag type="success">新增案例</el-tag><span>{{ structuredCaseFiles.eventChain.name }}</span><em>{{ formatFileSize(structuredCaseFiles.eventChain.size) }}</em></div>
             <div class="batch-hint">上传 event_chain.json；系统先按“渠道”规则库生成风险事件链，再生成分析文本。</div>
           </el-form-item>
+          <el-form-item v-else-if="structuredRecognitionMode === 'HISTORICAL' && isAntiFraud" label="分析文本" required>
+            <input type="file" accept=".json,application/json" @change="selectStructuredCaseFile('textAnalysis', $event)" />
+            <div v-if="structuredCaseFiles.textAnalysis" class="selected-file"><el-tag type="success">历史复用</el-tag><span>{{ structuredCaseFiles.textAnalysis.name }}</span><em>{{ formatFileSize(structuredCaseFiles.textAnalysis.size) }}</em></div>
+            <div class="batch-hint">上传 text_analysis.json，必须包含非空 text 或 analysis_text；框架抽取时直接复用。</div>
+          </el-form-item>
+          <el-form-item v-else-if="structuredRecognitionMode === 'HISTORICAL'" label="分析文本" required>
+            <input type="file" accept=".json,application/json" @change="selectStructuredCaseFile('analysisTexts', $event)" />
+            <div v-if="structuredCaseFiles.analysisTexts" class="selected-file"><el-tag type="success">历史复用</el-tag><span>{{ structuredCaseFiles.analysisTexts.name }}</span><em>{{ formatFileSize(structuredCaseFiles.analysisTexts.size) }}</em></div>
+            <div class="batch-hint">上传 analysis_texts.json，至少包含一段非空历史分析文本；上传后直接用于框架抽取。</div>
+          </el-form-item>
           <el-form-item v-else label="后续处理">
             <el-tag type="success">系统生成</el-tag>
-            <div class="batch-hint">{{ structuredRecognitionMode === 'HISTORICAL' ? '上传完成后由后端自动完成框架抽取。' : '上传完成后进入可疑报告处理页面。' }}</div>
+            <div class="batch-hint">上传完成后进入可疑报告处理页面。</div>
           </el-form-item>
           <el-form-item label="账户信息" :required="isAntiFraud">
             <input type="file" accept=".json,application/json" @change="selectStructuredCaseFile('accounts', $event)" />
@@ -138,7 +148,7 @@
             <input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="selectStructuredBatchFile" />
             <div v-if="structuredBatchFile" class="selected-file"><el-tag type="success">批处理</el-tag><span>{{ structuredBatchFile.name }}</span><em>{{ formatFileSize(structuredBatchFile.size) }}</em></div>
             <div class="batch-hint">
-              表头必须为 basic_info、customers、transaction_features。
+              {{ batchHeaderHint }}
             </div>
           </el-form-item>
         </template>
@@ -258,7 +268,8 @@ import {
   createAnalysisJobApi, getAnalysisJobApi, getAnalysisJobsApi,
   retryAnalysisJobApi, cancelAnalysisJobApi, deleteAnalysisJobApi,
   getWorkerConfigApi, updateWorkerConfigApi, getWorkerFilesApi, getWorkerFileApi, updateWorkerFileApi, uploadWorkerZipApi,
-  uploadStructuredCaseFilesApi, uploadStructuredCaseBatchFileApi, uploadAntiFraudCaseFilesApi
+  uploadStructuredCaseFilesApi, uploadStructuredCaseBatchFileApi, uploadAntiFraudCaseFilesApi,
+  uploadAntiFraudCaseBatchFileApi
 } from '@/api/analysis'
 import { getCasesApi } from '@/api/case'
 import { formatDateTime } from '@/utils/datetime'
@@ -273,7 +284,7 @@ const config = computed(() => ({
   title: '案例上传',
   subtitle: '上传历史案例或新增案例，并查看入库与自动处理进度',
   stepCodes: ['VALIDATE','PERSIST','HISTORY_FRAMEWORK'],
-  steps: ['数据校验','案例入库','历史案例自动框架抽取']
+  steps: ['数据校验','案例入库','历史案例抽取并自动入图']
 }))
 const jobs = ref<any[]>([])
 const total = ref(0)
@@ -341,12 +352,20 @@ const createSteps = [
   {index:3,name:'确认参数'},
   {index:4,name:'开始执行'}
 ]
+const batchHeaderHint=computed(()=>isAntiFraud.value
+  ? structuredRecognitionMode.value==='NEW'
+    ? '表头必须为 basic_info、customers、accounts、devices、event_chain；每个单元格填写对应 JSON。'
+    : '表头必须为 basic_info、customers、accounts、devices、text_analysis；每个单元格填写对应 JSON。'
+  : structuredRecognitionMode.value==='NEW'
+    ? '新增案例表头：basic_info、customers、transaction_features；每个单元格填写对应 JSON。'
+    : '历史案例表头：basic_info、customers、analysis_texts；每个单元格填写对应 JSON。')
 const wizardInputReady=computed(()=>Boolean(
   structuredCaseMode.value==='BATCH' ? structuredBatchFile.value
     : isAntiFraud.value
       ? structuredCaseFiles.basicInfo&&structuredCaseFiles.customers&&structuredCaseFiles.accounts&&structuredCaseFiles.devices
-        &&(structuredRecognitionMode.value==='HISTORICAL'||structuredCaseFiles.eventChain)
+        &&(structuredRecognitionMode.value==='HISTORICAL'?structuredCaseFiles.textAnalysis:structuredCaseFiles.eventChain)
       : structuredCaseFiles.basicInfo&&structuredCaseFiles.customers
+        &&(structuredRecognitionMode.value==='NEW'||structuredCaseFiles.analysisTexts)
 ))
 const workspaceDisplay=computed(()=>`默认数据空间（ID：${form.workspaceId}）`)
 const fileIdentity=(file:File|null)=>file?`${file.name}:${file.size}:${file.lastModified}`:''
@@ -371,9 +390,9 @@ const selectedInputText=computed(()=>{
   if(structuredCaseMode.value==='BATCH'){
     return `批处理 · ${type}（${structuredBatchFile.value?.name||'未选择文件'}${structuredBatchCaseCount.value?`，${structuredBatchCaseCount.value} 个案例`:''}）`
   }
-  if(isAntiFraud.value)return `单案例处理 · ${type}（基础四类 JSON${structuredRecognitionMode.value==='NEW'?' + event_chain.json':''}）`
+  if(isAntiFraud.value)return `单案例处理 · ${type}（基础四类 JSON + ${structuredRecognitionMode.value==='NEW'?'event_chain.json':'text_analysis.json'}）`
   const optional=[structuredCaseFiles.accounts,structuredCaseFiles.otherEntities].filter(Boolean).length
-  return `单案例处理 · ${type}（2 个必填文件，${optional} 个可选文件）`
+  return `单案例处理 · ${type}（${structuredRecognitionMode.value==='HISTORICAL'?3:2} 个必填文件，${optional} 个可选文件）`
 })
 const advanceCreateStep=async()=>{
   if(createStep.value===1&&!wizardInputReady.value){
@@ -381,8 +400,8 @@ const advanceCreateStep=async()=>{
       structuredCaseMode.value==='BATCH'
         ? '请选择 CSV/XLSX 批处理文件'
         : isAntiFraud.value
-        ? `请选择 basic_info.json、customers.json、accounts.json、devices.json${structuredRecognitionMode.value==='NEW'?' 和 event_chain.json':''}`
-        : '请选择 basic_info.json 和 customers.json')
+        ? `请选择 basic_info.json、customers.json、accounts.json、devices.json 和 ${structuredRecognitionMode.value==='NEW'?'event_chain.json':'text_analysis.json'}`
+        : `请选择 basic_info.json、customers.json${structuredRecognitionMode.value==='HISTORICAL'?' 和 analysis_texts.json':''}`)
   }
   if(createStep.value===1){
     validatingData.value=true
@@ -416,11 +435,19 @@ const changeStructuredRecognitionMode=()=>{
   structuredCaseFiles.analysisTexts=null
   structuredCaseFiles.textAnalysis=null
   if(structuredRecognitionMode.value==='HISTORICAL')structuredCaseFiles.eventChain=null
+  structuredBatchFile.value=null
+  structuredBatchCaseCount.value=0
+  resetStructuredCaseUpload()
+}
+const changeStructuredCaseMode=()=>{
+  structuredBatchFile.value=null
   structuredBatchCaseCount.value=0
   resetStructuredCaseUpload()
 }
 const changeScenario=()=>{
   structuredCaseMode.value='SINGLE'
+  structuredBatchFile.value=null
+  structuredBatchCaseCount.value=0
   Object.assign(structuredCaseFiles,{basicInfo:null,customers:null,analysisTexts:null,accounts:null,
     otherEntities:null,devices:null,eventChain:null,textAnalysis:null})
   resetStructuredCaseUpload()
@@ -446,7 +473,9 @@ const validateSelectedData=async()=>{
         return true
       }
       try{
-        const response:any=await uploadStructuredCaseBatchFileApi(file,structuredRecognitionMode.value)
+        const response:any=isAntiFraud.value
+          ? await uploadAntiFraudCaseBatchFileApi(file,structuredRecognitionMode.value)
+          : await uploadStructuredCaseBatchFileApi(file,structuredRecognitionMode.value)
         const result=response.data||{}
         structuredCaseUploadToken.value=String(result.uploadToken||'')
         structuredBatchCaseCount.value=Number(result.caseCount||0)
@@ -456,7 +485,7 @@ const validateSelectedData=async()=>{
           batchName:file.name,dataScale:`${structuredBatchCaseCount.value} 个案例，共 ${formatFileSize(file.size)}`,
           nameCheck:'表头、逐行 JSON、case_id 唯一性及识别类型一致性已确认',
           fingerprint:result.sourceSha256||'',
-          labelCheck:structuredRecognitionMode.value==='HISTORICAL'?'历史案例：上传后自动框架抽取':'新增案例：上传后进入可疑报告队列',
+          labelCheck:structuredRecognitionMode.value==='HISTORICAL'?'历史案例：按基本信息风险等级自动入图，缺失时转复核审批':'新增案例：上传后进入可疑报告队列',
           message:'批处理文件结构与全部案例数据校验通过'
         }
       }catch(error:any){
@@ -467,8 +496,9 @@ const validateSelectedData=async()=>{
     }
     const required=isAntiFraud.value
       ? [structuredCaseFiles.basicInfo,structuredCaseFiles.customers,structuredCaseFiles.accounts,structuredCaseFiles.devices,
-          structuredRecognitionMode.value==='NEW'?structuredCaseFiles.eventChain:true]
-      : [structuredCaseFiles.basicInfo,structuredCaseFiles.customers]
+          structuredRecognitionMode.value==='NEW'?structuredCaseFiles.eventChain:structuredCaseFiles.textAnalysis]
+      : [structuredCaseFiles.basicInfo,structuredCaseFiles.customers,
+          structuredRecognitionMode.value==='HISTORICAL'?structuredCaseFiles.analysisTexts:true]
     if(required.some(file=>!file))return false
     const files=Object.values(structuredCaseFiles).filter((file):file is File=>Boolean(file))
     const invalid=files.find(file=>!file.name.toLowerCase().endsWith('.json')||file.size<=0||file.size>100*1024*1024)
@@ -499,6 +529,9 @@ const validateSelectedData=async()=>{
           else if(structuredRecognitionMode.value==='NEW'){
             const chain=JSON.parse(await (structuredCaseFiles.eventChain as File).text())
             if(!Array.isArray(chain)||!chain.length)contentError='event_chain.json 顶层必须是非空 JSON 数组'
+          }else{
+            const analysis=JSON.parse(await (structuredCaseFiles.textAnalysis as File).text())
+            if(!analysis||Array.isArray(analysis)||typeof analysis!=='object'||!String(analysis.text||analysis.analysis_text||'').trim())contentError='text_analysis.json 必须包含非空 text 或 analysis_text'
           }
         }
       }catch(error:any){contentError=`案例文件不是有效 JSON：${error?.message||'解析失败'}`}
@@ -511,8 +544,8 @@ const validateSelectedData=async()=>{
       dataScale:`${files.length} 个 JSON 文件，共 ${formatFileSize(totalSize)}`,nameCheck:'必填文件与可选文件已确认',
       fingerprint:'上传后由服务端按案例目录计算 SHA-256',
       labelCheck:isAntiFraud.value
-        ? structuredRecognitionMode.value==='HISTORICAL'?'历史案例上传后自动生成中间报告并完成框架抽取':'新增案例进入可疑报告处理队列'
-        : structuredRecognitionMode.value==='HISTORICAL'?'历史案例上传后自动完成框架抽取':'新增案例进入可疑报告处理队列',
+        ? structuredRecognitionMode.value==='HISTORICAL'?'历史案例复用 text_analysis，按基本信息风险等级自动入图；缺失时转复核审批':'新增案例进入可疑报告处理队列'
+        : structuredRecognitionMode.value==='HISTORICAL'?'历史案例按基本信息风险等级自动入图；缺失时转复核审批':'新增案例进入可疑报告处理队列',
       message:contentError||(
         blocked?'仅支持单个不超过100MB、总计不超过100MB的非空 JSON 文件':'单案例文件组合、内容结构与处理策略校验通过'
       )
@@ -652,8 +685,8 @@ const createJob = async () => {
       uploadToken:structuredCaseUploadToken.value,caseCount:structuredCaseMode.value==='BATCH'?structuredBatchCaseCount.value:1,
       sourceFileName:structuredCaseMode.value==='BATCH' ? structuredBatchFile.value?.name
         : isAntiFraud.value
-          ? `basic_info.json + customers.json + accounts.json + devices.json${structuredRecognitionMode.value==='NEW'?' + event_chain.json':''}`
-          : `basic_info.json + customers.json${structuredCaseFiles.accounts?' + accounts.json':''}${structuredCaseFiles.otherEntities?' + other_entities.json':''}`
+          ? `basic_info.json + customers.json + accounts.json + devices.json + ${structuredRecognitionMode.value==='NEW'?'event_chain.json':'text_analysis.json'}`
+          : `basic_info.json + customers.json${structuredCaseFiles.analysisTexts?' + analysis_texts.json':''}${structuredCaseFiles.accounts?' + accounts.json':''}${structuredCaseFiles.otherEntities?' + other_entities.json':''}`
     }
     const response: any = await createAnalysisJobApi({
       ...form, jobType: config.value.mode,

@@ -550,6 +550,10 @@ public class CaseController {
     @GetMapping("/{caseId}/worker-result")
     public CommonResult<Map<String,Object>> workerResult(@PathVariable String caseId) {
         if (findCase(caseId) == null) return CommonResult.error(404, "Case does not exist");
+        Map<String,Object> canonicalStructured = loadCanonicalStructuredWorkerResult(caseId);
+        if (canonicalStructured != null) {
+            return CommonResult.success(canonicalStructured);
+        }
         // Prefer the indexed explicit lineage. The previous JSON LIKE-first
         // query scanned every large worker payload and made detail pages slow.
         List<Map<String,Object>> rows = jdbcTemplate.queryForList("""
@@ -617,6 +621,89 @@ public class CaseController {
             out.put("parseError", ex.getMessage());
         }
         return CommonResult.success(out);
+    }
+
+    /**
+     * Structured cases are persisted incrementally, so a batch may already have
+     * complete case documents even when its final job step times out. The
+     * PostgreSQL case library is therefore the authoritative detail-page source;
+     * analysis_job_step only remains as a compatibility path for older jobs.
+     */
+    @SuppressWarnings("unchecked")
+    Map<String,Object> loadCanonicalStructuredWorkerResult(String caseId) {
+        List<Map<String,Object>> rows = jdbcTemplate.queryForList("""
+            SELECT l.recognition_mode AS "recognitionMode",
+                   l.case_document::text AS "caseDocument",
+                   l.updated_at AS "completedAt",
+                   p.job_id AS "jobId",
+                   COALESCE(p.suspicious_report,'{}'::jsonb)::text AS "suspiciousReport",
+                   COALESCE(p.graph_snapshot,'{}'::jsonb)::text AS "graphSnapshot"
+              FROM structured_case_library l
+              LEFT JOIN case_processing_pool p ON p.case_id=l.case_id
+             WHERE l.case_id=? AND l.status='ACTIVE'
+             LIMIT 1
+            """, caseId);
+        if (rows.isEmpty()) return null;
+
+        Map<String,Object> stored = rows.get(0);
+        try {
+            Map<String,Object> framework = objectMapper.readValue(
+                    Objects.toString(stored.get("caseDocument"), "{}"), Map.class);
+            if (framework.isEmpty()) return null;
+            String recognitionMode = Objects.toString(
+                    stored.get("recognitionMode"), "HISTORICAL").trim().toUpperCase();
+
+            Map<String,Object> report = objectMapper.readValue(
+                    Objects.toString(stored.get("suspiciousReport"), "{}"), Map.class);
+            if (report.isEmpty() && framework.get("analysis_texts") instanceof Map<?,?> texts) {
+                Map<String,Object> analysisTexts = new LinkedHashMap<>((Map<String,Object>) texts);
+                String analysisText = analysisTexts.values().stream()
+                        .filter(String.class::isInstance)
+                        .map(String.class::cast)
+                        .map(String::trim)
+                        .filter(value -> !value.isEmpty())
+                        .collect(java.util.stream.Collectors.joining("\n\n"));
+                report = new LinkedHashMap<>();
+                report.put("analysisTexts", analysisTexts);
+                report.put("analysisText", analysisText);
+                report.put("generated", "NEW".equals(recognitionMode));
+                report.put("source", "NEW".equals(recognitionMode)
+                        ? "GENERATED_ANALYSIS_TEXT" : "EXISTING_ANALYSIS_TEXT");
+            }
+
+            Map<String,Object> extraction = new LinkedHashMap<>();
+            extraction.put("generated", "NEW".equals(recognitionMode));
+            extraction.put("sourceLabel", "NEW".equals(recognitionMode) ? "系统生成" : "历史复用");
+            extraction.put("data", framework);
+
+            Map<String,Object> caseResult = new LinkedHashMap<>();
+            caseResult.put("caseId", caseId);
+            caseResult.put("recognitionMode", recognitionMode);
+            caseResult.put("suspiciousReport", report);
+            caseResult.put("extractionResult", extraction);
+            caseResult.put("frameworkExtraction", framework);
+            caseResult.put("graphSnapshot", objectMapper.readValue(
+                    Objects.toString(stored.get("graphSnapshot"), "{}"), Map.class));
+
+            Map<String,Object> worker = new LinkedHashMap<>();
+            worker.put("worker", "XI_AN_STRUCTURED_CASE_PIPELINE");
+            worker.put("status", "SUCCEEDED");
+            worker.put("recognitionMode", recognitionMode);
+            worker.put("results", List.of(caseResult));
+
+            Map<String,Object> out = new LinkedHashMap<>();
+            out.put("available", true);
+            out.put("caseId", caseId);
+            out.put("jobId", stored.get("jobId"));
+            out.put("completedAt", stored.get("completedAt"));
+            out.put("jobType", "STRUCTURED");
+            out.put("source", "POSTGRESQL_FINAL_CASE");
+            out.put("workerResult", worker);
+            out.put("raw", framework);
+            return out;
+        } catch (Exception ex) {
+            throw new IllegalStateException("PostgreSQL结构化案例文档解析失败: " + caseId, ex);
+        }
     }
 
     @SuppressWarnings("unchecked")
