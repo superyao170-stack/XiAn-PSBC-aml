@@ -11,6 +11,11 @@
             <el-form-item label="案例ID">
               <el-input v-model="searchForm.caseId" clearable placeholder="案例ID" />
             </el-form-item>
+            <el-form-item label="案例场景">
+              <el-select v-model="searchForm.scenarioCode" clearable placeholder="全部场景">
+                <el-option v-for="item in scenarioOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
             <el-form-item label="案例状态">
               <el-select v-model="searchForm.caseStatus" clearable placeholder="全部状态">
                 <el-option label="待生成报告" value="PENDING_REPORT" />
@@ -47,7 +52,7 @@
         <el-table-column prop="caseName" label="案例名称" min-width="90" show-overflow-tooltip />
         <el-table-column label="案例场景" min-width="100">
           <template #default="{ row }">
-            <el-tag>{{ scenarioText(row.scenarioCode) }}</el-tag>
+            <el-tag :type="scenarioTagType(row.scenarioCode)">{{ scenarioText(row.scenarioCode) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="案例来源" min-width="90"><template #default="{row}">{{ row.recognitionMode==='HISTORICAL'?'历史案例':'新增案例' }}</template></el-table-column>
@@ -62,10 +67,11 @@
             <div class="two-line" :title="`${getStatusText(row.caseStatus)}\n${formatDateTime(row.createdAt)}`"><el-tag size="small" :type="getStatusTagType(row.caseStatus)">{{ getStatusText(row.caseStatus) }}</el-tag><span class="created-at">{{ formatDateTime(row.createdAt) }}</span></div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="108" align="right" header-align="right" fixed="right">
+        <el-table-column label="操作" width="150" align="right" header-align="right" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
             <el-button link size="small" type="primary" @click="openCase(row,'overview')">详情</el-button>
+            <el-button link size="small" type="danger" :loading="deletingCaseId===row.caseId" @click="deleteCase(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -87,7 +93,8 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { CfRiskCase } from '@/types'
-import { getCasesApi } from '@/api/case'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { deleteCaseApi, getCasesApi } from '@/api/case'
 import { formatDateTime } from '@/utils/datetime'
 
 const route = useRoute(), router = useRouter()
@@ -95,6 +102,7 @@ const jobIdFilter = ref(String(route.query.jobId || ''))
 
 const searchForm = reactive({
   caseId: '',
+  scenarioCode: '',
   caseStatus: '',
   riskLevel: '',
   recognitionMode: ''
@@ -106,9 +114,11 @@ const total = ref(0)
 const cases = ref<CfRiskCase[]>([])
 const selectedCases = ref<CfRiskCase[]>([])
 const loading = ref(false)
+const deletingCaseId = ref('')
 const loadError = ref('')
 const scenarioOptions = ref<{label:string;value:string}[]>([
-  { label: '反洗钱', value: 'AML' }
+  { label: '反洗钱', value: 'AML' },
+  { label: '反欺诈', value: 'ANTI_FRAUD' }
 ])
 const getRiskText = (level: string) => {
   const map: Record<string, string> = { LOW: '低风险', MEDIUM: '中风险', HIGH: '高风险' }
@@ -130,8 +140,25 @@ const getStatusTagType = (status: string) => {
   return map[status] || 'info'
 }
 const scenarioText = (value:string) => scenarioOptions.value.find(item=>item.value===value)?.label || value || '未设置'
+const scenarioTagType = (value:string) => value === 'ANTI_FRAUD' ? 'danger' : value === 'AML' ? 'primary' : 'info'
 const openCase = (row:CfRiskCase,tab:'overview'|'matters'|'graph') =>
   router.push({path:`/case/detail/${encodeURIComponent(row.caseId)}`,query:{tab}})
+const deleteCase = async (row:CfRiskCase) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除案例“${row.caseName || row.caseId}”吗？案例将从列表及全景图谱中移除。`,
+      '删除案例',
+      { type:'warning', confirmButtonText:'删除', cancelButtonText:'取消', confirmButtonClass:'el-button--danger' }
+    )
+  } catch { return }
+  deletingCaseId.value = row.caseId
+  try {
+    await deleteCaseApi(row.caseId)
+    ElMessage.success('案例已删除')
+    if (cases.value.length === 1 && currentPage.value > 1) currentPage.value -= 1
+    else await loadCases()
+  } finally { deletingCaseId.value = '' }
+}
 
 const loadCases = async () => {
   loading.value = true
@@ -139,6 +166,7 @@ const loadCases = async () => {
   try {
     const response: any = await getCasesApi({
       pageNum: currentPage.value, pageSize: pageSize.value, caseId: searchForm.caseId || undefined,
+      scenarioCode: searchForm.scenarioCode || undefined,
       caseStatus: searchForm.caseStatus || undefined, riskLevel: searchForm.riskLevel || undefined,
       recognitionMode:searchForm.recognitionMode||undefined, jobId: jobIdFilter.value || undefined
     })
@@ -157,7 +185,7 @@ const handleSearch = () => {
   loadCases()
 }
 const resetForm = () => {
-  Object.assign(searchForm, { caseId: '', caseStatus: '', riskLevel: '', recognitionMode:'' })
+  Object.assign(searchForm, { caseId: '', scenarioCode: '', caseStatus: '', riskLevel: '', recognitionMode:'' })
   handleSearch()
 }
 

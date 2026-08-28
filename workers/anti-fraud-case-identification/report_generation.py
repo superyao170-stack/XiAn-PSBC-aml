@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -11,6 +12,10 @@ from typing import Any
 WORKER_ROOT = Path(__file__).resolve().parent
 SHARED_WORKER = WORKER_ROOT.parent / "structured-case-identification"
 XIAN_MODULE_ROOT = SHARED_WORKER / "xian_modules"
+RISK_KB_PATH = WORKER_ROOT / "data" / "kb" / "fraud_risk_event_knowledge_base.json"
+RISK_KB_COLLECTION = os.environ.get(
+    "ANTI_FRAUD_QDRANT_COLLECTION", "fraud_risk_event_knowledge_base"
+)
 if str(XIAN_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(XIAN_MODULE_ROOT))
 
@@ -118,7 +123,8 @@ def generate_analysis(record: dict[str, Any]) -> dict[str, Any]:
         model = FraudGovernedJsonModel(client)
         generator = GovernedAnalysisTextGenerator(
             llm_client=client,
-            knowledge_base_path=WORKER_ROOT / "data" / "kb" / "fraud_rules.json",
+            knowledge_base_path=RISK_KB_PATH,
+            qdrant_collection=RISK_KB_COLLECTION,
             prompts_dir=WORKER_ROOT / "data" / "analysis_prompts",
             model=model,
             workflow_factory=FraudAnalysisWorkflow,

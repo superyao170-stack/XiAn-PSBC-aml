@@ -74,6 +74,23 @@ class BatchInputTests(unittest.TestCase):
 
             self.assertEqual("已有单字段可疑报告", records[0]["analysis_texts"]["analysis_text"])
 
+    def test_historical_csv_accepts_enriched_accounts_and_evidences(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = self._write_csv(directory, "history.csv", (
+                "basic_info", "customers", "analysis_texts", "accounts", "evidences"
+            ), [{
+                "basic_info": _basic("CASE-H-RICH-1"),
+                "customers": _customers("H-RICH-1"),
+                "analysis_texts": {"analysis_text1": "已有历史可疑报告"},
+                "accounts": [{"entity_id": "ACCOUNT-H-RICH-1", "account_number": "62220001"}],
+                "evidences": [{"evidence_id": "EVIDENCE-H-RICH-1", "evidence_type": "交易流水"}],
+            }])
+
+            records = load_batch_case_file(source, "HISTORICAL")
+
+            self.assertEqual("ACCOUNT-H-RICH-1", records[0]["accounts"][0]["entity_id"])
+            self.assertEqual("EVIDENCE-H-RICH-1", records[0]["evidences"][0]["evidence_id"])
+
     def test_historical_csv_rejects_new_case_transaction_features_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = self._write_csv(directory, "history.csv", (

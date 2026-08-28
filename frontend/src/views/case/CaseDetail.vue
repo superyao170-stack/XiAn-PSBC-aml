@@ -305,8 +305,8 @@
             <div class="wide-table-wrap">
               <el-table :data="eventModels" class="framework-table clickable-detail-table" table-layout="fixed" :tooltip-options="overviewTooltipOptions" empty-text="当前案例没有已落库事件" @row-click="openEventRowDetail">
                 <el-table-column prop="businessId" label="事件ID" width="150" show-overflow-tooltip />
-                <el-table-column prop="name" label="事件名称" min-width="180" show-overflow-tooltip />
-                <el-table-column label="事件类型" min-width="150" show-overflow-tooltip><template #default="{row}">{{ businessEnumText(row.type) }}</template></el-table-column>
+                <el-table-column label="事件名称" min-width="240" show-overflow-tooltip><template #default="{row}">{{ displayEventName(row) }}</template></el-table-column>
+                <el-table-column label="事件种类" min-width="170" show-overflow-tooltip><template #default="{row}">{{ eventTypeText(row.type) }}</template></el-table-column>
                 <el-table-column prop="event_text" label="事件描述" min-width="300" show-overflow-tooltip />
                 <el-table-column label="开始日期" width="155"><template #default="{row}">{{ formatDateTime(row.started_at) }}</template></el-table-column>
                 <el-table-column label="结束日期" width="155"><template #default="{row}">{{ formatDateTime(row.ended_at) }}</template></el-table-column>
@@ -327,10 +327,8 @@
                 <el-table-column prop="relationId" label="关系ID" width="150" show-overflow-tooltip />
                 <el-table-column label="关系类型" width="150" show-overflow-tooltip><template #default="{row}">{{ businessEnumText(row.type) }}</template></el-table-column>
                 <el-table-column prop="description" label="关系描述" min-width="260" show-overflow-tooltip />
-                <el-table-column prop="sourceId" label="源节点ID" width="160" show-overflow-tooltip />
                 <el-table-column prop="source" label="源节点名称" min-width="170" show-overflow-tooltip />
                 <el-table-column label="源节点类型" width="120" show-overflow-tooltip><template #default="{row}">{{ businessEnumText(row.sourceType) }}</template></el-table-column>
-                <el-table-column prop="targetId" label="目标节点ID" width="160" show-overflow-tooltip />
                 <el-table-column prop="target" label="目标节点名称" min-width="170" show-overflow-tooltip />
                 <el-table-column label="目标节点类型" width="120" show-overflow-tooltip><template #default="{row}">{{ businessEnumText(row.targetType) }}</template></el-table-column>
               </el-table>
@@ -528,6 +526,7 @@ import CaseKnowledgeExplanationPanel from '@/components/graph/CaseKnowledgeExpla
 import CaseBasicInfoDescriptions from '@/components/case/CaseBasicInfoDescriptions.vue'
 import { getCaseApi, getCasesApi, getCaseEventsApi, getCaseWorkflowApi, getCaseGraphApi, getCaseWorkerResultApi, getCaseSignalsApi, getCaseMattersApi, getCaseTechniquesApi, getCaseReviewSuggestionsApi, getCaseReasoningApi, getCaseCoreChainApi, getCaseKnowledgeExplanationChainsApi, updateCaseReviewSuggestionApi, updateInvestigationHypothesisApi, updateCaseOverviewApi, submitCaseApi } from '@/api/case'
 import { updateStructuredCaseAnalysisTextApi } from '@/api/analysis'
+import { getEventMetadataApi } from '@/api/system'
 import { formatDateTime } from '@/utils/datetime'
 const route = useRoute(), router = useRouter()
 const submitting = ref(false)
@@ -554,6 +553,7 @@ const normalizeDetailTab=(value:any)=>{
 const activeTab = ref(normalizeDetailTab(route.query.tab)), graphCanvas = ref<InstanceType<typeof G6GraphCanvas>>()
 const activeOverviewLayers = ref(['case','entity','event','relation','evidence'])
 const caseDetail = ref<any>({}), events = ref<any[]>([]), signals = ref<any[]>([]), history = ref<any[]>([])
+const eventMetadataRows = ref<any[]>([])
 const taskCases=ref<any[]>([]),selectedTaskCaseId=ref('')
 const reportEditing=ref(false),reportSaving=ref(false),reportDraft=ref('')
 const caseOverviewEditing=ref(false),caseOverviewSaving=ref(false)
@@ -818,17 +818,40 @@ const displayReferenceId=(value:any)=>{
 const workerSourceText = computed(() => workerResult.value?.texts?.normalized_text || workerResult.value?.texts?.canonical_text || workerResult.value?.texts?.raw_text || workerCase.value?.raw_text || '')
 const caseModel = computed(() => ({ ...(workerCase.value||{}), uid:String(caseDetail.value.id||'待补充'), name:caseDetail.value.caseName || '未命名案例', type:caseDetail.value.caseType || '待补充', business_domain:caseDetail.value.scenarioCode || '待补充', risk_level:caseDetail.value.riskLevel || '待补充', suspected_crime_type:workerCase.value?.suspected_crime_type || caseDetail.value.suspectedCrimeType || '', case_source:caseDetail.value.caseSource || '未知', raw_text:workerSourceText.value || caseDetail.value.description || '未保存原始文本' }))
 const eventMatchKey=(event:any)=>`${String(event?.name||event?.eventName||event?.event_name||'').trim()}|${String(event?.type||event?.eventType||event?.event_type||'').trim()}`
+const eventTypeNameByCode=computed<Map<string,string>>(()=>new Map(
+  eventMetadataRows.value.map((item:any)=>[String(item.id),String(item.name)] as [string,string])))
+const eventTypeText=(value:any):string=>eventTypeNameByCode.value.get(String(value||''))||String(value||'未分类事件')
+const eventIdentifier=(value:any)=>/^(?:(?:ET\d{3}|EVT[-_].*|\d{7})(?:事件)?)$/i.test(String(value||'').trim())
+const primaryEventSubject=(event:any)=>{
+  const customers=structuredFramework.value?.customers||workerResult.value?.nodes?.customers||[]
+  const accounts=structuredFramework.value?.accounts||workerResult.value?.nodes?.accounts||[]
+  const refs=[event?.involved_entities,event?.involvedEntities,event?.entity_refs,event?.entityRefs]
+    .find(Array.isArray)||[]
+  const refSet=new Set(refs.map((value:any)=>String(value)))
+  const eventText=String(event?.event_text||event?.eventText||event?.event_description||event?.description||'')
+  const matchedCustomer=customers.find((item:any)=>{
+    const id=String(item?.entity_id||item?.entityId||item?.uid||'')
+    const name=String(item?.customer_name||item?.customerName||item?.name||'')
+    return (id&&refSet.has(id))||(name&&eventText.includes(name))
+  })
+  if(matchedCustomer)return String(matchedCustomer.customer_name||matchedCustomer.customerName||matchedCustomer.name).trim()
+  const matchedAccount=accounts.find((item:any)=>refSet.has(String(item?.entity_id||item?.entityId||item?.uid||'')))
+  if(matchedAccount)return String(matchedAccount.holder_name||matchedAccount.holderName||matchedAccount.account_number||'相关客户').trim()
+  const customer=customers[0]
+  return String(customer?.customer_name||customer?.customerName||customer?.name||'相关客户').trim()
+}
 const meaningfulEventName=(event:any)=>{
   const raw=String(event?.name||event?.eventName||event?.event_name||'').trim()
-  if(raw&&raw.toUpperCase()!=='UNNAMED_WORKER_EVENT')return raw
-  const typeName=String(event?.type||event?.eventType||event?.event_type||'').replace(/^\d{2}-/,'').trim()
+  if(raw&&raw.toUpperCase()!=='UNNAMED_WORKER_EVENT'&&!eventIdentifier(raw))return raw
+  const typeName=eventTypeText(event?.type||event?.eventType||event?.event_type||raw).replace(/^\d{2}-/,'').trim()
   const text=`${event?.event_text||event?.eventText||event?.event_description||''} ${event?.description||''}`
-  if(typeName.includes('收款')&&/(?:多笔|三笔|归集)/.test(text))return '多笔资金收取'
+  if(typeName.includes('收款')&&/(?:多笔|三笔|归集)/.test(text))return `${primaryEventSubject(event)}控制的账户完成多笔资金收取`
   if((typeName.includes('转账')||typeName.includes('付款'))&&/(?:分拆|分散).*转出/.test(text)){
-    return `${String(event?.channel||'').includes('网银')||text.includes('网银')?'网银':''}分拆资金转出`
+    return `${primaryEventSubject(event)}控制的账户通过${String(event?.channel||'').includes('网银')||text.includes('网银')?'网银':''}分拆转出资金`
   }
-  return typeName||'交易事件'
+  return `${primaryEventSubject(event)}控制的账户发生${typeName||'异常资金活动'}`
 }
+const displayEventName=(event:any)=>meaningfulEventName(event)
 const trimBusinessListItem=(value:any)=>String(value||'')
   .trim()
   .replace(/[。；;、，,\s]+$/g,'')
@@ -904,7 +927,7 @@ const normalizedEvent = (source:any) => {
     businessId:dbEvent?.businessId||persistedBusinessId(source),
     uid:source?.uid||source?.event_id||internalId,
     name:meaningfulEventName({...event,...source}),
-    type:source?.type||source?.event_type||event.eventType||'未分类事件',
+    type:eventTypeText(source?.type||source?.event_type||event.eventType||'未分类事件'),
     event_text:source?.event_text||source?.event_description||source?.description||source?.eventText||source?.name||source?.event_name||event.eventName||'',
     started_at:source?.started_at||source?.event_start_date||event.eventTime||source?.occurredAt,
     ended_at:source?.ended_at||source?.event_end_date||source?.endedAt,
@@ -1064,12 +1087,36 @@ const displayBusinessDomain=(value:any)=>{
   if(/洗钱|AML|医疗腐败/i.test(normalized))return '反洗钱'
   return normalized||'待补充'
 }
+const derivedCaseDescription=computed(()=>{
+  const customerNames=[...new Set(customerModels.value
+    .map((item:any)=>String(item.customer_name||item.customerName||item.name||'').trim())
+    .filter(Boolean))]
+  const eventTypes=[...new Set(eventModels.value.map((item:any)=>eventTypeText(item.type)).filter(Boolean))]
+  const dates=eventModels.value
+    .flatMap((item:any)=>[item.started_at,item.ended_at])
+    .filter(Boolean).map((value:any)=>String(value).slice(0,10)).sort()
+  const subject=customerNames.length?`以${customerNames.slice(0,2).join('、')}为主要关联客户`:'涉及多名关联客户'
+  const period=dates.length?`在${dates[0]}至${dates[dates.length-1]}期间`:'在本案观察期内'
+  const activity=eventTypes.length
+    ?`相关账户呈现${eventTypes.slice(0,4).join('、')}等资金活动`
+    :'相关账户出现多项异常资金活动'
+  const relationCount=structuredFramework.value?.relationships?.length||graphEdges.value.length
+  const scale=`关联${accountModels.value.length}个账户，形成${eventModels.value.length}项风险事件和${relationCount}条关系`
+  return `本案${subject}，${period}，${activity}；${scale}，需结合交易流水、客户资料及业务凭证进一步核验。`
+})
+const displayCaseDescription=computed(()=>{
+  const stored=String(rawOverviewValue(
+    caseDetail.value.description,workerCase.value?.case_description,
+    workerCase.value?.caseDescription,workerCase.value?.description)||'').trim()
+  const invalid=!stored||/(?:mock|测试|模拟)/i.test(stored)||/^用于.*(?:抽取|验证)/.test(stored)
+  return invalid?derivedCaseDescription.value:stored
+})
 const caseOverviewFields = computed(() => {
   const item=caseModel.value
   return [
     overviewField('案例ID',displayCaseSequenceId.value),
     overviewField('案例名称',displayCaseName.value),
-    overviewField('案例描述',rawOverviewValue(caseDetail.value.description,item.description,item.raw_text),true),
+    overviewField('案例描述',displayCaseDescription.value,true),
     overviewField('业务领域',displayBusinessDomain(rawOverviewValue(caseDetail.value.businessDomain,workerCase.value?.business_domain,workerCase.value?.businessDomain,'01-反洗钱'))),
     overviewField('案例类型',rawOverviewValue(caseDetail.value.businessCaseType,item.business_case_type,item.businessCaseType)),
     overviewField('报送方向',rawOverviewValue(caseDetail.value.reportingDirection,item.reporting_direction,item.reportingDirection,item.report_direction,item.reportDirection),true),
@@ -1391,8 +1438,8 @@ const rowDetailLayer=ref('')
 const rowDetailRecord=ref<Record<string,any>>({})
 const rowDetailLabels:Record<string,string>={
   internalId:'内部记录ID',businessId:'业务ID',uid:'节点标识',
-  relationId:'关系ID',sourceId:'源节点ID',source:'源节点名称',sourceType:'源节点类型',
-  targetId:'目标节点ID',target:'目标节点名称',targetType:'目标节点类型',
+  relationId:'关系ID',source:'源节点名称',sourceType:'源节点类型',
+  target:'目标节点名称',targetType:'目标节点类型',
   associationType:'证据关联类型',associationId:'证据关联ID',
   rule_name:'识别规则',ruleName:'识别规则',
   product_service:'产品服务',productService:'产品服务',
@@ -1413,6 +1460,7 @@ const formatRowDetailValue=(value:any)=>{
   return displayGraphValue(value)
 }
 const rowDetailFields=computed(()=>Object.entries(rowDetailRecord.value)
+  .filter(([key])=>!['sourceId','targetId'].includes(key))
   .filter(([key,value])=>(rowDetailLabels[key]||graphPropertyLabels[key])
     &&value!==undefined&&value!==null&&value!=='')
   .map(([key,value])=>({
@@ -1531,7 +1579,7 @@ const editValue=(value:any)=>value===undefined||value===null?'':String(value)
 function startCaseOverviewEdit(){
   const reported=editValue(caseDetail.value.reportedAt)
   caseOverviewForm.value={
-    description:editValue(caseDetail.value.description),
+    description:editValue(displayCaseDescription.value),
     businessDomain:editValue(caseDetail.value.businessDomain||'01-反洗钱'),
     businessCaseType:editValue(caseDetail.value.businessCaseType),
     reportingDirection:editValue(caseDetail.value.reportingDirection),
@@ -1590,6 +1638,8 @@ async function load() {
       optional('knowledge',getCaseKnowledgeExplanationChainsApi(id), {nodes:[],edges:[],chains:[],multiStageMatter:null})
     ])
     caseDetail.value = c.data || {}; events.value = e.data || []; signals.value = s.data || []
+    const eventScenario = caseDetail.value.scenarioCode === 'ANTI_FRAUD' ? 'ANTI_FRAUD' : 'AML'
+    const em = await optional('eventMetadata',getEventMetadataApi(eventScenario), {eventTypes:[]})
     selectedTaskCaseId.value=String(caseDetail.value.caseId||id)
     taskCases.value=caseDetail.value.caseId?[caseDetail.value]:[]
     history.value = (w.data || []).map((x:any) => ({ time: formatDateTime(x.completedAt || x.startedAt), title: x.stepName || x.workflowStatus, description: x.opinion || x.result || x.status }))
@@ -1597,6 +1647,7 @@ async function load() {
     // 图谱快照只读取当前核心链；TuGraph 全量案例子图仅在核心链尚未生成时作为边界过滤后的降级数据源。
     coreChain.value=cc.data||{}
     knowledgeExplanation.value=kc.data||{nodes:[],edges:[],chains:[],multiStageMatter:null}
+    eventMetadataRows.value=em.data?.eventTypes||[]
     const presentationNodes=Array.isArray(knowledgeExplanation.value?.nodes)
       ?knowledgeExplanation.value.nodes:[]
     const workerSnapshot=structuredCaseResult.value?.graphSnapshot||{}

@@ -1,0 +1,226 @@
+{
+  "source": "anti_fraud_analysis_text_cases_1500.csv",
+  "headers": [
+    "basic_info",
+    "customers",
+    "accounts",
+    "devices",
+    "text_analysis"
+  ],
+  "totalCases": 1500,
+  "uniqueCaseIds": 1500,
+  "chunkSize": 50,
+  "chunkCount": 30,
+  "parts": [
+    {
+      "part": 1,
+      "fileName": "anti_fraud_historical_1500_part_01.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250204-0001",
+      "lastCaseId": "FRD-TXT-20250701-0050"
+    },
+    {
+      "part": 2,
+      "fileName": "anti_fraud_historical_1500_part_02.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250704-0051",
+      "lastCaseId": "FRD-TXT-20251128-0100"
+    },
+    {
+      "part": 3,
+      "fileName": "anti_fraud_historical_1500_part_03.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20251201-0101",
+      "lastCaseId": "FRD-TXT-20260427-0150"
+    },
+    {
+      "part": 4,
+      "fileName": "anti_fraud_historical_1500_part_04.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260430-0151",
+      "lastCaseId": "FRD-TXT-20250303-0200"
+    },
+    {
+      "part": 5,
+      "fileName": "anti_fraud_historical_1500_part_05.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250306-0201",
+      "lastCaseId": "FRD-TXT-20250731-0250"
+    },
+    {
+      "part": 6,
+      "fileName": "anti_fraud_historical_1500_part_06.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250803-0251",
+      "lastCaseId": "FRD-TXT-20251228-0300"
+    },
+    {
+      "part": 7,
+      "fileName": "anti_fraud_historical_1500_part_07.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20251231-0301",
+      "lastCaseId": "FRD-TXT-20260527-0350"
+    },
+    {
+      "part": 8,
+      "fileName": "anti_fraud_historical_1500_part_08.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260530-0351",
+      "lastCaseId": "FRD-TXT-20250402-0400"
+    },
+    {
+      "part": 9,
+      "fileName": "anti_fraud_historical_1500_part_09.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250405-0401",
+      "lastCaseId": "FRD-TXT-20250830-0450"
+    },
+    {
+      "part": 10,
+      "fileName": "anti_fraud_historical_1500_part_10.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250902-0451",
+      "lastCaseId": "FRD-TXT-20260127-0500"
+    },
+    {
+      "part": 11,
+      "fileName": "anti_fraud_historical_1500_part_11.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260130-0501",
+      "lastCaseId": "FRD-TXT-20260626-0550"
+    },
+    {
+      "part": 12,
+      "fileName": "anti_fraud_historical_1500_part_12.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260629-0551",
+      "lastCaseId": "FRD-TXT-20250502-0600"
+    },
+    {
+      "part": 13,
+      "fileName": "anti_fraud_historical_1500_part_13.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250505-0601",
+      "lastCaseId": "FRD-TXT-20250929-0650"
+    },
+    {
+      "part": 14,
+      "fileName": "anti_fraud_historical_1500_part_14.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20251002-0651",
+      "lastCaseId": "FRD-TXT-20260226-0700"
+    },
+    {
+      "part": 15,
+      "fileName": "anti_fraud_historical_1500_part_15.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260301-0701",
+      "lastCaseId": "FRD-TXT-20260726-0750"
+    },
+    {
+      "part": 16,
+      "fileName": "anti_fraud_historical_1500_part_16.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260729-0751",
+      "lastCaseId": "FRD-TXT-20250601-0800"
+    },
+    {
+      "part": 17,
+      "fileName": "anti_fraud_historical_1500_part_17.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250604-0801",
+      "lastCaseId": "FRD-TXT-20251029-0850"
+    },
+    {
+      "part": 18,
+      "fileName": "anti_fraud_historical_1500_part_18.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20251101-0851",
+      "lastCaseId": "FRD-TXT-20260328-0900"
+    },
+    {
+      "part": 19,
+      "fileName": "anti_fraud_historical_1500_part_19.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260331-0901",
+      "lastCaseId": "FRD-TXT-20250201-0950"
+    },
+    {
+      "part": 20,
+      "fileName": "anti_fraud_historical_1500_part_20.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250204-0951",
+      "lastCaseId": "FRD-TXT-20250701-1000"
+    },
+    {
+      "part": 21,
+      "fileName": "anti_fraud_historical_1500_part_21.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250704-1001",
+      "lastCaseId": "FRD-TXT-20251128-1050"
+    },
+    {
+      "part": 22,
+      "fileName": "anti_fraud_historical_1500_part_22.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20251201-1051",
+      "lastCaseId": "FRD-TXT-20260427-1100"
+    },
+    {
+      "part": 23,
+      "fileName": "anti_fraud_historical_1500_part_23.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260430-1101",
+      "lastCaseId": "FRD-TXT-20250303-1150"
+    },
+    {
+      "part": 24,
+      "fileName": "anti_fraud_historical_1500_part_24.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250306-1151",
+      "lastCaseId": "FRD-TXT-20250731-1200"
+    },
+    {
+      "part": 25,
+      "fileName": "anti_fraud_historical_1500_part_25.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250803-1201",
+      "lastCaseId": "FRD-TXT-20251228-1250"
+    },
+    {
+      "part": 26,
+      "fileName": "anti_fraud_historical_1500_part_26.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20251231-1251",
+      "lastCaseId": "FRD-TXT-20260527-1300"
+    },
+    {
+      "part": 27,
+      "fileName": "anti_fraud_historical_1500_part_27.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260530-1301",
+      "lastCaseId": "FRD-TXT-20250402-1350"
+    },
+    {
+      "part": 28,
+      "fileName": "anti_fraud_historical_1500_part_28.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250405-1351",
+      "lastCaseId": "FRD-TXT-20250830-1400"
+    },
+    {
+      "part": 29,
+      "fileName": "anti_fraud_historical_1500_part_29.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20250902-1401",
+      "lastCaseId": "FRD-TXT-20260127-1450"
+    },
+    {
+      "part": 30,
+      "fileName": "anti_fraud_historical_1500_part_30.csv",
+      "caseCount": 50,
+      "firstCaseId": "FRD-TXT-20260130-1451",
+      "lastCaseId": "FRD-TXT-20260626-1500"
+    }
+  ]
+}

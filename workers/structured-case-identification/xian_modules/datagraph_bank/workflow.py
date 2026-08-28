@@ -159,6 +159,7 @@ class BankCaseWorkflow:
         service_retry_delay: float = 0.5,
         corenlp_timeout: float = 120.0,
         service_controller: LocalServiceController | None = None,
+        kb_collection: str | None = None,
     ) -> None:
         self.kb_path = Path(kb_path)
         self.output_root = Path(output_root)
@@ -181,6 +182,7 @@ class BankCaseWorkflow:
             "llm_enabled": llm_enabled,
             "chat_model": chat_model,
             "embedding_model": embedding_model,
+            "kb_collection": kb_collection,
             "prompt_dir": self.prompt_dir,
             "corenlp_url": corenlp_url,
             "coreference_threshold": coreference_threshold,
@@ -219,6 +221,7 @@ class BankCaseWorkflow:
             dedup_threshold=dedup_threshold,
             llm_client=self.llm_client,
             prompt_path=self.prompt_dir / "event_extraction.txt",
+            qdrant_collection=kb_collection,
         )
         self.relationship_extractor = RelationshipExtractor(
             llm_client=self.llm_client,

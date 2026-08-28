@@ -68,7 +68,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import G6GraphCanvas from '@/components/graph/G6GraphCanvas.vue'
-import { getCasesApi, getCaseKnowledgeExplanationChainsApi } from '@/api/case'
+import { getCasesApi, getCaseGraphApi } from '@/api/case'
 import { getApprovedCaseSimilarityGraphApi } from '@/api/caseProcessing'
 import { formatDateTime } from '@/utils/datetime'
 import { saveAnalysisScope } from '@/utils/analysisScope'
@@ -78,6 +78,8 @@ type GraphPlane = 'EVENT_GRAPH'
 type NodeType = {key:string;label:string;color:string;icon:string;raw:string[];plane:GraphPlane}
 
 const cases=ref<any[]>([]), dateRange=ref<string[]>([]), scenarios=ref<string[]>(['AML','ANTI_FRAUD'])
+const totalApprovedCases=ref(0)
+const PANORAMA_CASE_LIMIT=50
 const router=useRouter()
 const nodes=ref<any[]>([]), edges=ref<any[]>([]), selected=ref<any>(null), validCaseCount=ref(0), loading=ref(false)
 const graphCanvas=ref<InstanceType<typeof G6GraphCanvas>>()
@@ -140,7 +142,12 @@ const filteredCases=computed(()=>cases.value.filter(item=>{
   const date=formatDateTime(item.createdAt).slice(0,10)
   return !dateRange.value?.length||(date>=dateRange.value[0]&&date<=dateRange.value[1])
 }))
-const summaryText=computed(()=>`${validCaseCount.value} 个案件已入图：共 ${displayedNodes.value.length} 个节点、${displayedEdges.value.length} 条关系`)
+const summaryText=computed(()=>{
+  const scope=totalApprovedCases.value>cases.value.length
+    ? `${validCaseCount.value}/${totalApprovedCases.value} 个案件已入图（当前展示最近 ${cases.value.length} 个）`
+    : `${validCaseCount.value} 个案件已入图`
+  return `${scope}：共 ${displayedNodes.value.length} 个节点、${displayedEdges.value.length} 条关系`
+})
 const nodeName=(node:any)=>{
   const properties=node.properties||{}
   if(nodeType(node)==='CASE')return String(node.name||properties.caseName||properties.name||properties.caseId||node.caseId||node.uid||node.id||'未命名案件')
@@ -182,16 +189,11 @@ const toggleType=(key:string)=>{
 async function loadCases(){
   loading.value=true
   try{
-    const approved:any[]=[]
-    let pageNum=1
-    while(true){
-      const response:any=await getCasesApi({pageNum,pageSize:200,caseStatus:'APPROVED'})
-      const records=response.data?.records||[]
-      approved.push(...records)
-      if(approved.length>=Number(response.data?.total||0)||records.length===0)break
-      pageNum+=1
-    }
-    cases.value=approved
+    // Keep the panorama usable instead of starting thousands of simultaneous
+    // case-graph requests. The UI labels the bounded recent-case window.
+    const response:any=await getCasesApi({pageNum:1,pageSize:PANORAMA_CASE_LIMIT,caseStatus:'APPROVED'})
+    cases.value=response.data?.records||[]
+    totalApprovedCases.value=Number(response.data?.total||0)
     await loadGraph()
   }catch(error:any){
     ElMessage.error(error.message||'案件列表加载失败')
@@ -204,10 +206,9 @@ async function loadGraph(){
   selected.value=null
   try{
     const graphs=await Promise.all(filteredCases.value.map(async item=>{
-      const knowledgeResponse:any=await getCaseKnowledgeExplanationChainsApi(
-        item.caseId, { view:'PANORAMA', limit:220 })
+      const graphResponse:any=await getCaseGraphApi(item.caseId)
         .catch(()=>({data:{nodes:[],edges:[],chains:[],multiStageMatter:null}}))
-      const presentation=knowledgeResponse.data||{}
+      const presentation=graphResponse.data||{}
       return {
         caseId:item.caseId,
         caseName:item.caseName||item.caseId,

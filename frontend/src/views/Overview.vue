@@ -36,8 +36,8 @@
           <el-icon><View /></el-icon>
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ caseStats.reviewing }}</div>
-          <div class="stat-label">待复核案例</div>
+          <div class="stat-value">{{ caseStats.pendingReport }}</div>
+          <div class="stat-label">待生成报告</div>
         </div>
       </el-card>
       <el-card class="stat-card">
@@ -45,8 +45,8 @@
           <el-icon><CircleCheck /></el-icon>
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ caseStats.approving }}</div>
-          <div class="stat-label">待审批案例</div>
+          <div class="stat-value">{{ caseStats.pendingExtraction }}</div>
+          <div class="stat-label">待框架抽取</div>
         </div>
       </el-card>
       <el-card class="stat-card">
@@ -54,8 +54,8 @@
           <el-icon><Warning /></el-icon>
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ caseStats.highRisk }}</div>
-          <div class="stat-label">高风险案例</div>
+          <div class="stat-value">{{ caseStats.pendingSimilarity }}</div>
+          <div class="stat-label">待相似匹配</div>
         </div>
       </el-card>
     </div>
@@ -77,9 +77,9 @@
             <template #default="{row}">{{ row.caseSequenceId || row.sourceCaseNo || '待补充' }}</template>
           </el-table-column>
           <el-table-column prop="caseName" label="案例名称" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="riskLevel" label="风险等级" width="105">
+          <el-table-column prop="riskLevel" label="风险程度" width="105">
             <template #default="{ row }">
-              <el-tag :type="getRiskTagType(row.riskLevel)">{{ riskText(row.riskLevel) }}</el-tag>
+              <el-tag :type="getRiskTagType(row.riskLevel)">{{ getRiskText(row.riskLevel) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="caseStatus" label="状态" width="105"><template #default="{row}">{{ statusText(row.caseStatus) }}</template></el-table-column>
@@ -111,16 +111,28 @@ const sceneName = ref(sceneCode.value === 'AML' ? '反洗钱' : '反欺诈')
 
 const caseStats = ref({
   total: 0,
-  reviewing: 0,
-  approving: 0,
-  highRisk: 0
+  pendingReport: 0,
+  pendingExtraction: 0,
+  pendingSimilarity: 0
 })
 
 const recentCases = ref<any[]>([])
 let statusChartInstance: echarts.ECharts | null = null
 let riskChartInstance: echarts.ECharts | null = null
-const statusText = (value:string) => ({ DRAFT:'待提交复核', IN_REVIEW:'复核中', PENDING_APPROVAL:'待审批', APPROVED:'已审批', REJECTED:'已驳回', CLOSED:'已结案', REOPENED:'已重开' } as Record<string,string>)[value] || value
-const riskText = (value:string) => ({ LOW:'低风险', MEDIUM:'中风险', HIGH:'高风险', CRITICAL:'严重风险' } as Record<string,string>)[value] || value
+const statusText = (value:string) => ({
+  DRAFT: '待提交复核',
+  IN_REVIEW: '复核中',
+  PENDING_REPORT: '待生成报告',
+  PENDING_EXTRACTION: '待框架抽取',
+  PENDING_SIMILARITY: '待相似匹配',
+  PENDING_APPROVAL: '待审批',
+  APPROVED: '已审批',
+  REJECTED: '已驳回',
+  CLOSED: '已结案',
+  REOPENED: '已重开',
+  FAILED: '处理失败'
+} as Record<string,string>)[value] || value
+const getRiskText = (value:string) => ({ LOW:'低风险', MEDIUM:'中风险', HIGH:'高风险', CRITICAL:'严重风险' } as Record<string,string>)[value] || '未定级'
 
 const getRiskTagType = (level: string) => {
   const map: Record<string, string> = {
@@ -149,7 +161,7 @@ const renderCharts = (statusData: any[], riskData: any[]) => {
   riskChartInstance ||= echarts.init(document.querySelector('.chart-card:last-child .chart') as HTMLElement)
   riskChartInstance.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    grid: { left: '5%', right: '4%', top: 54, bottom: 32, containLabel: true },
     xAxis: { type: 'category', data: ['低风险', '中风险', '高风险', '严重风险'] },
     yAxis: { type: 'value', name: '案例数', minInterval: 1 },
     series: [{
@@ -171,14 +183,17 @@ const loadOverview = async () => {
     scenarioCode: sceneCode.value
   })
   const data = response.data || {}
+  const statusDistribution = data.statusDistribution || []
+  const statusCount = (status: string) =>
+    Number(statusDistribution.find((item: any) => item.name === status)?.value || 0)
   caseStats.value = {
     total: data.caseCount || 0,
-    reviewing: data.pendingReviewCount || 0,
-    approving: data.pendingApprovalCount || 0,
-    highRisk: data.highRiskCount || 0
+    pendingReport: statusCount('PENDING_REPORT'),
+    pendingExtraction: statusCount('PENDING_EXTRACTION'),
+    pendingSimilarity: statusCount('PENDING_SIMILARITY')
   }
   recentCases.value = data.recentCases || []
-  renderCharts(data.statusDistribution || [], data.riskDistribution || [])
+  renderCharts(statusDistribution, data.riskDistribution || [])
 }
 
 const changeScene = () => {
@@ -263,13 +278,8 @@ onMounted(loadOverview)
   margin-bottom: 20px;
 }
 
-.chart-card {
-  height: 280px;
-}
-
-.chart {
-  height: calc(100% - 50px);
-}
+.chart-card { min-height: 410px; }
+.chart { height: 320px; }
 
 .bottom-grid { min-height: 480px; }
 

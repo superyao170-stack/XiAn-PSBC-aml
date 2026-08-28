@@ -304,7 +304,12 @@ public class AnalysisWorkerService {
         workerRequest.put("recognitionMode", recognitionMode);
         workerRequest.put("targetStage", "HISTORICAL".equals(recognitionMode) ? "FRAMEWORK" : "UPLOAD");
         workerRequest.put("pipelineBudgetSeconds", budgetSeconds);
-        List<String> historyFiles = materializePostgresHistorySnapshot(job, caseWorkerRoot);
+        // Historical ingestion stops at FRAMEWORK. Similarity is a later,
+        // explicit stage, so copying the entire PostgreSQL history corpus for
+        // every five-case import batch is both unused and quadratic in size.
+        List<String> historyFiles = "HISTORICAL".equals(recognitionMode)
+                ? List.of()
+                : materializePostgresHistorySnapshot(job, caseWorkerRoot);
         workerRequest.put("historyFiles", historyFiles);
         workerRequest.put("historySource", "POSTGRESQL");
         workerRequest.put("streamResults", true);
@@ -542,7 +547,9 @@ public class AnalysisWorkerService {
               deleted=false
             """, caseId, caseName, caseId, description, bank, job.get("workspace_id"),
                 value(job.get("scenario_code"), "AML"), caseStatus, riskScore, riskLevel,
-                framework.path("customers").size(), framework.path("events").size(),
+                framework.path("customers").size(),
+                basic.path("structured_transaction_summary").path("tx_cnt_30d")
+                        .asInt(framework.path("events").size()),
                 snapshotId, snapshotHash, automaticApprover,
                 normalizeStructuredBusinessDomain(basic.path("business_domain").asText(),
                         value(job.get("scenario_code"), "AML")),
@@ -614,6 +621,8 @@ public class AnalysisWorkerService {
                 objectMapper.writeValueAsString(result.path("suspiciousReport")), frameworkJson,
                 objectMapper.writeValueAsString(snapshot), riskLevel, caseStatus);
         recordCaseJobRelation(caseId, job);
+        tuGraphWriter.writeFrameworkCase(caseId, bank,
+                ((Number) job.get("workspace_id")).longValue(), framework);
         return true;
     }
 
@@ -697,7 +706,7 @@ public class AnalysisWorkerService {
                 """, eventId, caseId, bank,
                     truncate(value(event.path("event_name").asText(), rawId), 200),
                     truncate(event.path("event_type").asText(), 50),
-                    truncate(event.path("event_standard_code").asText(), 64),
+                    truncate(eventStandardCode(event), 64),
                     riskScore, objectMapper.writeValueAsString(event), riskScore, riskLevel,
                     "XI_AN_CASE_FRAMEWORK_EXTRACTION", 1);
         }
@@ -711,6 +720,16 @@ public class AnalysisWorkerService {
             return String.join("；", values);
         }
         return node.asText(null);
+    }
+
+    private String eventStandardCode(JsonNode event) {
+        String direct = value(event.path("event_standard_code").asText(),
+                event.path("event_type_id").asText());
+        if (direct != null && !direct.isBlank()) return direct;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("知识库事件类型：(ET\\d+)")
+                .matcher(event.path("recognition_rule").asText(""));
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     private Map<String, Object> buildTextCase(Map<String, Object> job) throws Exception {

@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -28,6 +29,7 @@ public class CaseProcessingService {
     private final String amlPython;
     private final String fraudPython;
     private final long timeoutSeconds;
+    private final Map<String,List<String>> historySnapshotCache = new ConcurrentHashMap<>();
 
     public CaseProcessingService(JdbcTemplate jdbc, ObjectMapper json,
             @Value("${worker.structured-case.root:../workers/structured-case-identification}") String amlRoot,
@@ -197,7 +199,7 @@ public class CaseProcessingService {
         try {
             Path query = runDir.resolve("query.json");
             Files.writeString(query, json.writeValueAsString(framework), StandardCharsets.UTF_8);
-            List<String> history = historySnapshot(pool, runDir.resolve("history"));
+            List<String> history = historySnapshot(pool);
             JsonNode similarity = invokeScript(amlRoot, amlPython, amlRoot.resolve("similarity_matching.py"),
                     Map.of("queryFile", query.toString(), "historyFiles", history, "settings", Map.of()));
             if ("FAILED".equals(similarity.path("status").asText())) throw new IllegalStateException(similarity.path("error").asText());
@@ -234,7 +236,7 @@ public class CaseProcessingService {
         jdbc.update("UPDATE structured_case_library SET status='INACTIVE',updated_at=CURRENT_TIMESTAMP WHERE case_id=?", caseId);
         jdbc.update("DELETE FROM case_similarity_ranking WHERE query_case_id=?", caseId);
         jdbc.update("UPDATE cf_risk_case SET case_status='PENDING_EXTRACTION',risk_score=NULL,risk_level=NULL,updated_at=CURRENT_TIMESTAMP WHERE case_id=?", caseId);
-        transitionAudit(caseId, from, "PENDING_EXTRACTION", "EDIT_REPORT_AND_RESTART", operator, report);
+        transitionAudit(caseId, from, "PENDING_EXTRACTION", "SAVE_REPORT_AND_QUEUE_FRAMEWORK", operator, report);
     }
 
     public void approve(String caseId, String finalRiskLevel, List<String> orderedCaseIds, String operator) throws Exception {
@@ -315,9 +317,14 @@ public class CaseProcessingService {
         }
         String output = outputFuture.get(10, TimeUnit.SECONDS);
         String[] lines = output.trim().split("\\R");
-        String payload = lines.length == 0 ? "" : lines[lines.length - 1];
-        if (payload.isBlank()) throw new IllegalStateException("Worker 未返回结果: " + truncate(output, 600));
-        JsonNode result = json.readTree(payload);
+        JsonNode result = null;
+        for (int index = lines.length - 1; index >= 0; index--) {
+            String candidate = lines[index].trim();
+            if (candidate.isBlank() || (!candidate.startsWith("{") && !candidate.startsWith("["))) continue;
+            try { result = json.readTree(candidate); break; }
+            catch (Exception ignored) { /* Python may emit warnings after the JSON response. */ }
+        }
+        if (result == null) throw new IllegalStateException("Worker 未返回结果: " + truncate(output, 600));
         if (process.exitValue() != 0 && !"FAILED".equals(result.path("status").asText()))
             throw new IllegalStateException("Worker 执行失败: " + truncate(output, 600));
         return result;
@@ -335,20 +342,39 @@ public class CaseProcessingService {
         Files.writeString(root.resolve(name), json.writeValueAsString(safe), StandardCharsets.UTF_8);
     }
 
-    private List<String> historySnapshot(Map<String,Object> pool, Path root) throws Exception {
+    private synchronized List<String> historySnapshot(Map<String,Object> pool) throws Exception {
+        String bankCode = String.valueOf(pool.get("bank_code"));
+        String scenarioCode = String.valueOf(pool.get("scenario_code"));
+        Map<String,Object> version = jdbc.queryForMap("""
+            SELECT COUNT(*) AS count,COALESCE(MAX(l.updated_at)::text,'') AS updated
+              FROM structured_case_library l JOIN cf_risk_case c ON c.case_id=l.case_id
+             WHERE l.bank_code=? AND l.scenario_code=? AND l.status='ACTIVE'
+               AND c.deleted=false AND c.case_status='APPROVED'
+            """, bankCode, scenarioCode);
+        String cacheKey = bankCode + "|" + scenarioCode + "|" + version.get("count") + "|" + version.get("updated");
+        List<String> cached = historySnapshotCache.get(cacheKey);
+        if (cached != null && cached.stream().allMatch(path -> Files.isRegularFile(Path.of(path)))) return cached;
+
+        Path root = amlRoot.resolve("runs").resolve("similarity-history-cache")
+                .resolve(sha256(cacheKey).substring(0, 20));
         Files.createDirectories(root);
         List<Map<String,Object>> rows = jdbc.queryForList("""
-            SELECT l.case_id,l.case_document::text AS document FROM structured_case_library l
+            SELECT l.case_id,l.content_sha256,l.case_document::text AS document FROM structured_case_library l
             JOIN cf_risk_case c ON c.case_id=l.case_id
             WHERE l.bank_code=? AND l.scenario_code=? AND l.status='ACTIVE' AND c.deleted=false AND c.case_status='APPROVED'
             ORDER BY l.case_id
-            """, pool.get("bank_code"), pool.get("scenario_code"));
+            """, bankCode, scenarioCode);
         List<String> result = new ArrayList<>(); int index = 0;
         for (Map<String,Object> row : rows) {
-            Path file = root.resolve(String.format("%04d_%s.json", ++index, sha256(String.valueOf(row.get("case_id"))).substring(0,12)));
-            Files.writeString(file, String.valueOf(row.get("document")), StandardCharsets.UTF_8); result.add(file.toString());
+            String identity = row.get("case_id") + "|" + row.get("content_sha256");
+            Path file = root.resolve(String.format("%04d_%s.json", ++index, sha256(identity).substring(0,12)));
+            if (!Files.isRegularFile(file)) Files.writeString(file, String.valueOf(row.get("document")), StandardCharsets.UTF_8);
+            result.add(file.toString());
         }
-        return result;
+        List<String> immutable = List.copyOf(result);
+        historySnapshotCache.clear();
+        historySnapshotCache.put(cacheKey, immutable);
+        return immutable;
     }
 
     private void persistLibrary(Map<String,Object> pool, JsonNode framework, boolean active) throws Exception {

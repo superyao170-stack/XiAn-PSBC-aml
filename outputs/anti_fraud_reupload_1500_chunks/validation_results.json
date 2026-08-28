@@ -1,0 +1,202 @@
+[
+  {
+    "part": 6,
+    "fileName": "anti_fraud_historical_1500_part_06.csv",
+    "caseCount": 50,
+    "sourceSha256": "d7180a9c4ab2b900bbb93d619d8438f54bbe974e4d83ce1466c0be64288c7e35",
+    "firstCaseId": "FRD-TXT-20250803-0251",
+    "lastCaseId": "FRD-TXT-20251228-0300"
+  },
+  {
+    "part": 7,
+    "fileName": "anti_fraud_historical_1500_part_07.csv",
+    "caseCount": 50,
+    "sourceSha256": "d34dfb766257378e1dcb43bc7c9ea41916a9e7f80272e262d5ab93ab02ed116a",
+    "firstCaseId": "FRD-TXT-20251231-0301",
+    "lastCaseId": "FRD-TXT-20260527-0350"
+  },
+  {
+    "part": 8,
+    "fileName": "anti_fraud_historical_1500_part_08.csv",
+    "caseCount": 50,
+    "sourceSha256": "1d30828360ab4449f274f69b3cd95defa451f0515ce0d00addd17ee2e358d962",
+    "firstCaseId": "FRD-TXT-20260530-0351",
+    "lastCaseId": "FRD-TXT-20250402-0400"
+  },
+  {
+    "part": 9,
+    "fileName": "anti_fraud_historical_1500_part_09.csv",
+    "caseCount": 50,
+    "sourceSha256": "c8698ab8d72eebdbe6d561d13cf5a711cca2dbf59979c685b177cab269d645bb",
+    "firstCaseId": "FRD-TXT-20250405-0401",
+    "lastCaseId": "FRD-TXT-20250830-0450"
+  },
+  {
+    "part": 10,
+    "fileName": "anti_fraud_historical_1500_part_10.csv",
+    "caseCount": 50,
+    "sourceSha256": "028245f900a79e7e0a521c012ccd9ba7403118f8948ff8575d2110a69a0cc8ef",
+    "firstCaseId": "FRD-TXT-20250902-0451",
+    "lastCaseId": "FRD-TXT-20260127-0500"
+  },
+  {
+    "part": 11,
+    "fileName": "anti_fraud_historical_1500_part_11.csv",
+    "caseCount": 50,
+    "sourceSha256": "c718befc0e078cfbe58c281c544bad860d6a963c7a8131b76be959bf9e386846",
+    "firstCaseId": "FRD-TXT-20260130-0501",
+    "lastCaseId": "FRD-TXT-20260626-0550"
+  },
+  {
+    "part": 12,
+    "fileName": "anti_fraud_historical_1500_part_12.csv",
+    "caseCount": 50,
+    "sourceSha256": "ec75920e73096d4def3100a3a51cd36e415a9ba0c8565c2596dddd9003d22192",
+    "firstCaseId": "FRD-TXT-20260629-0551",
+    "lastCaseId": "FRD-TXT-20250502-0600"
+  },
+  {
+    "part": 13,
+    "fileName": "anti_fraud_historical_1500_part_13.csv",
+    "caseCount": 50,
+    "sourceSha256": "2c7b14234e6496664928f2a13eac380d88b59d7b1abb9391c9760cd1a117ec11",
+    "firstCaseId": "FRD-TXT-20250505-0601",
+    "lastCaseId": "FRD-TXT-20250929-0650"
+  },
+  {
+    "part": 14,
+    "fileName": "anti_fraud_historical_1500_part_14.csv",
+    "caseCount": 50,
+    "sourceSha256": "840628d6ec2a3eb4b35b86dc677f44eb7179c23e17efa7a1882907b88a70460d",
+    "firstCaseId": "FRD-TXT-20251002-0651",
+    "lastCaseId": "FRD-TXT-20260226-0700"
+  },
+  {
+    "part": 15,
+    "fileName": "anti_fraud_historical_1500_part_15.csv",
+    "caseCount": 50,
+    "sourceSha256": "d6816cee919f5e3399dc70b3d96c64195813e27438d03ae57968c648587dfd85",
+    "firstCaseId": "FRD-TXT-20260301-0701",
+    "lastCaseId": "FRD-TXT-20260726-0750"
+  },
+  {
+    "part": 16,
+    "fileName": "anti_fraud_historical_1500_part_16.csv",
+    "caseCount": 50,
+    "sourceSha256": "99ac7f4127992174840c058173d57a5aba4ea1b682249c8582645cc54365d123",
+    "firstCaseId": "FRD-TXT-20260729-0751",
+    "lastCaseId": "FRD-TXT-20250601-0800"
+  },
+  {
+    "part": 17,
+    "fileName": "anti_fraud_historical_1500_part_17.csv",
+    "caseCount": 50,
+    "sourceSha256": "e742ad72a36c0009bab40999b4a5359e34178dbb614c6a939f72b88a780b8d2b",
+    "firstCaseId": "FRD-TXT-20250604-0801",
+    "lastCaseId": "FRD-TXT-20251029-0850"
+  },
+  {
+    "part": 18,
+    "fileName": "anti_fraud_historical_1500_part_18.csv",
+    "caseCount": 50,
+    "sourceSha256": "b6a82b88099dcf19e107256ad81f40dde995eb5e9216cd2246802e32bb0be404",
+    "firstCaseId": "FRD-TXT-20251101-0851",
+    "lastCaseId": "FRD-TXT-20260328-0900"
+  },
+  {
+    "part": 19,
+    "fileName": "anti_fraud_historical_1500_part_19.csv",
+    "caseCount": 50,
+    "sourceSha256": "54801bfa2d6b066ca376de25db5d95101c12ba2b884fa4e93897181d003e3cf8",
+    "firstCaseId": "FRD-TXT-20260331-0901",
+    "lastCaseId": "FRD-TXT-20250201-0950"
+  },
+  {
+    "part": 20,
+    "fileName": "anti_fraud_historical_1500_part_20.csv",
+    "caseCount": 50,
+    "sourceSha256": "b6ebc4827b73f7ca4fa4518bc57ecef974c60ac52e226a2f38f913955785e62e",
+    "firstCaseId": "FRD-TXT-20250204-0951",
+    "lastCaseId": "FRD-TXT-20250701-1000"
+  },
+  {
+    "part": 21,
+    "fileName": "anti_fraud_historical_1500_part_21.csv",
+    "caseCount": 50,
+    "sourceSha256": "7c6fb657697ba44e99d597db7406eca539ff94a35197913339f150f590dd983d",
+    "firstCaseId": "FRD-TXT-20250704-1001",
+    "lastCaseId": "FRD-TXT-20251128-1050"
+  },
+  {
+    "part": 22,
+    "fileName": "anti_fraud_historical_1500_part_22.csv",
+    "caseCount": 50,
+    "sourceSha256": "a60642e7b7df4a1a709bbc92f169a50ac5a3a09728661909f715a22d13858d14",
+    "firstCaseId": "FRD-TXT-20251201-1051",
+    "lastCaseId": "FRD-TXT-20260427-1100"
+  },
+  {
+    "part": 23,
+    "fileName": "anti_fraud_historical_1500_part_23.csv",
+    "caseCount": 50,
+    "sourceSha256": "e6f6073bf8000492b6f573f52b2df0cb06490cb54d9f99ba59317e28fd8841f5",
+    "firstCaseId": "FRD-TXT-20260430-1101",
+    "lastCaseId": "FRD-TXT-20250303-1150"
+  },
+  {
+    "part": 24,
+    "fileName": "anti_fraud_historical_1500_part_24.csv",
+    "caseCount": 50,
+    "sourceSha256": "ff6471a85e66ed71f31c80dd98f748725ea9cc958926648bd387d8120c1d34b2",
+    "firstCaseId": "FRD-TXT-20250306-1151",
+    "lastCaseId": "FRD-TXT-20250731-1200"
+  },
+  {
+    "part": 25,
+    "fileName": "anti_fraud_historical_1500_part_25.csv",
+    "caseCount": 50,
+    "sourceSha256": "bd7184940886adb9c26bf81c2d183f34359875cf72a3fce5b99975bed16ecc36",
+    "firstCaseId": "FRD-TXT-20250803-1201",
+    "lastCaseId": "FRD-TXT-20251228-1250"
+  },
+  {
+    "part": 26,
+    "fileName": "anti_fraud_historical_1500_part_26.csv",
+    "caseCount": 50,
+    "sourceSha256": "526682cee93add999d1577a295fc12133431f8433129288cc00509508641ef44",
+    "firstCaseId": "FRD-TXT-20251231-1251",
+    "lastCaseId": "FRD-TXT-20260527-1300"
+  },
+  {
+    "part": 27,
+    "fileName": "anti_fraud_historical_1500_part_27.csv",
+    "caseCount": 50,
+    "sourceSha256": "ce22fb75cd20b3fab8db05aa05397b5867011e1317b2aca60be54046326e7628",
+    "firstCaseId": "FRD-TXT-20260530-1301",
+    "lastCaseId": "FRD-TXT-20250402-1350"
+  },
+  {
+    "part": 28,
+    "fileName": "anti_fraud_historical_1500_part_28.csv",
+    "caseCount": 50,
+    "sourceSha256": "84658ae01d79c7486c9b7f94757ced65451104e614c62ac27293b6e888f28379",
+    "firstCaseId": "FRD-TXT-20250405-1351",
+    "lastCaseId": "FRD-TXT-20250830-1400"
+  },
+  {
+    "part": 29,
+    "fileName": "anti_fraud_historical_1500_part_29.csv",
+    "caseCount": 50,
+    "sourceSha256": "69a7c2aeddecd7cf9aff015754819eb53c84ee811266ffc86209630a0d6ca3b3",
+    "firstCaseId": "FRD-TXT-20250902-1401",
+    "lastCaseId": "FRD-TXT-20260127-1450"
+  },
+  {
+    "part": 30,
+    "fileName": "anti_fraud_historical_1500_part_30.csv",
+    "caseCount": 50,
+    "sourceSha256": "d345b08d54b8436715838f852f45638ab2111c110afe2c690f0de6dce2daf5f4",
+    "firstCaseId": "FRD-TXT-20260130-1451",
+    "lastCaseId": "FRD-TXT-20260626-1500"
+  }
+]

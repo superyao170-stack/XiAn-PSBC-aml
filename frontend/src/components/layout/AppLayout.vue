@@ -209,7 +209,8 @@ const normalizeBusinessMenu = (menu: any): any => {
     '/graph/association-clues': '关联线索分析',
     '/system': '系统管理',
     '/system/roles': '角色管理',
-    '/system/menus': '菜单管理'
+    '/system/menus': '菜单管理',
+    '/system/event-metadata': '事件元数据管理'
   }
   return {
     ...menu,
@@ -239,7 +240,8 @@ const defaultMenus = [
   ]},
   { id: 90, parentId: 0, menuName: '系统管理', path: '/system', icon: 'el-icon-setting', children: [
     { id: 91, parentId: 90, menuName: '角色管理', path: '/system/roles', children: [] },
-    { id: 92, parentId: 90, menuName: '菜单管理', path: '/system/menus', children: [] }
+    { id: 92, parentId: 90, menuName: '菜单管理', path: '/system/menus', children: [] },
+    { id: 93, parentId: 90, menuName: '事件元数据管理', path: '/system/event-metadata', children: [] }
   ]}
 ]
 

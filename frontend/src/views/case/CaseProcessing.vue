@@ -18,7 +18,6 @@
         <el-table-column prop="id" label="案例ID" width="90" />
         <el-table-column prop="caseName" label="案例名称" min-width="220" show-overflow-tooltip />
         <el-table-column label="案例场景" width="110"><template #default="{row}">{{ sceneText(row.scenarioCode) }}</template></el-table-column>
-        <el-table-column label="案例来源" width="110"><template #default="{row}"><el-tag :type="row.recognitionMode==='HISTORICAL'?'info':'primary'">{{ row.recognitionMode==='HISTORICAL'?'历史案例':'新增案例' }}</el-tag></template></el-table-column>
         <el-table-column prop="bankCode" label="所属银行" min-width="150" show-overflow-tooltip />
         <el-table-column label="案例状态" width="140"><template #default="{row}"><el-tag :type="statusType(row.processingStage)">{{ statusText(row.processingStage) }}</el-tag></template></el-table-column>
         <el-table-column label="更新时间" width="170"><template #default="{row}">{{ formatDateTime(row.updatedAt) }}</template></el-table-column>
@@ -46,7 +45,7 @@
           </el-tab-pane>
           <el-tab-pane v-if="detail.suspiciousReport" label="可疑报告" name="report">
             <el-input v-model="reportText" type="textarea" :rows="18" />
-            <div class="report-actions"><el-button type="primary" :loading="savingReport" @click="saveReport">保存并重新框架抽取</el-button></div>
+            <div class="report-actions"><el-button type="primary" :loading="savingReport" @click="saveReport">保存</el-button></div>
           </el-tab-pane>
           <el-tab-pane v-if="detail.frameworkResult" label="框架抽取结果" name="framework">
             <div class="five-layer-strip"><span v-for="(label,index) in layerLabels" :key="label"><i>0{{index+1}}</i>{{label}}</span></div>
@@ -54,9 +53,74 @@
           </el-tab-pane>
           <el-tab-pane v-if="detail.similarityResult || detail.similarityRanking?.length" label="相似案例" name="similarity">
             <el-alert v-if="page.key==='approval'" title="可通过上下移动调整最终顺序；审核通过后顺序和权重会永久写回。" type="info" :closable="false" />
-            <div v-for="(item,index) in orderedMatches" :key="item.caseId" class="match-row">
-              <b>#{{index+1}}</b><span>{{ item.caseName||item.caseId }}</span><em>相似度 {{ similarityText(item.similarity) }}</em>
-              <div v-if="page.key==='approval'"><el-button size="small" :disabled="index===0" @click="move(index,-1)">上移</el-button><el-button size="small" :disabled="index===orderedMatches.length-1" @click="move(index,1)">下移</el-button></div>
+            <div v-for="(item,index) in orderedMatches" :key="matchKey(item,index)" class="match-card" :class="{expanded:isMatchExpanded(item,index)}">
+              <div
+                class="match-row"
+                role="button"
+                tabindex="0"
+                :aria-expanded="isMatchExpanded(item,index)"
+                @click="toggleMatch(item,index)"
+                @keydown.enter.prevent="toggleMatch(item,index)"
+                @keydown.space.prevent="toggleMatch(item,index)"
+              >
+                <b>#{{index+1}}</b><span>{{ item.caseName||item.caseId }}</span><em>相似度 {{ similarityText(item.similarity) }}</em>
+                <div v-if="page.key==='approval'" class="match-actions" @click.stop @keydown.stop><el-button size="small" :disabled="index===0" @click="move(index,-1)">上移</el-button><el-button size="small" :disabled="index===orderedMatches.length-1" @click="move(index,1)">下移</el-button></div>
+                <span class="match-toggle">{{ isMatchExpanded(item,index)?'收起':'匹配详情' }}<i>⌄</i></span>
+              </div>
+
+              <div v-show="isMatchExpanded(item,index)" class="match-detail">
+                <div class="match-metrics">
+                  <div><small>综合相似度</small><strong>{{ similarityText(item.similarity) }}</strong><span>图结构综合得分</span></div>
+                  <div><small>事件向量相似度</small><strong>{{ similarityText(item.vectorSimilarity ?? item.vector_similarity) }}</strong><span>事件类型向量余弦</span></div>
+                  <div><small>事件类型重叠率</small><strong>{{ similarityText(item.eventTypeOverlap ?? item.event_type_overlap) }}</strong><span>共同事件类型 {{ item.sharedEventTypeCount ?? item.shared_event_type_count ?? 0 }} 类</span></div>
+                  <div><small>事件数量比</small><strong>{{ similarityText(item.eventCountRatio ?? item.event_count_ratio) }}</strong><span>两侧事件规模接近度</span></div>
+                  <div><small>归一化 GED</small><strong>{{ decimalText(item.normalizedGed ?? item.normalized_ged) }}</strong><span>越接近 0 越相似</span></div>
+                </div>
+
+                <div class="match-counts">
+                  <span>命中节点 <strong>{{ matchedValue(item,'matchedNodeCount','matched_node_count') }}</strong></span>
+                  <span>命中关系 <strong>{{ matchedValue(item,'matchedEdgeCount','matched_edge_count') }}</strong></span>
+                  <span>原始 GED <strong>{{ decimalText(item.ged) }}</strong></span>
+                </div>
+
+                <section class="event-similarity-panel">
+                  <div class="event-similarity-head">
+                    <div><small>EVENT SIMILARITY</small><h4>事件之间的相似点</h4></div>
+                    <el-tag round>{{ eventAnchors(item).length }} 个锚点</el-tag>
+                  </div>
+                  <p class="event-summary">{{ eventSummary(item).summary || '暂无事件锚点摘要' }}</p>
+                  <div v-if="eventAnchors(item).length" class="event-anchor-list">
+                    <article v-for="(anchor,anchorIndex) in eventAnchors(item)" :key="`${matchKey(item,index)}-${anchorIndex}`" class="event-anchor-card">
+                      <header>
+                        <b>锚点 {{ anchorIndex+1 }}</b>
+                        <el-tag size="small" :type="anchor.anchor_level==='high'?'success':'warning'">{{ anchor.anchor_level==='high'?'高置信度':'普通候选' }}</el-tag>
+                        <span>描述相似度 {{ similarityText(anchor.description_similarity ?? anchor.descriptionSimilarity) }}</span>
+                      </header>
+                      <div class="event-compare-grid">
+                        <div class="event-side query-side">
+                          <small>查询事件</small><h5>{{ eventField(anchor,'query','event_name') || anchor.query_event_id || '—' }}</h5>
+                          <el-tag size="small">{{ eventField(anchor,'query','event_type') || anchor.event_type || '—' }}</el-tag>
+                          <p>{{ eventField(anchor,'query','event_description') || '暂无事件描述' }}</p>
+                        </div>
+                        <div class="event-side candidate-side">
+                          <small>候选事件</small><h5>{{ eventField(anchor,'candidate','event_name') || anchor.candidate_event_id || '—' }}</h5>
+                          <el-tag size="small" type="info">{{ eventField(anchor,'candidate','event_type') || anchor.event_type || '—' }}</el-tag>
+                          <p>{{ eventField(anchor,'candidate','event_description') || '暂无事件描述' }}</p>
+                        </div>
+                      </div>
+                      <div v-if="commonPoints(anchor).length" class="common-points">
+                        <b>共同描述</b>
+                        <div v-for="(point,pointIndex) in commonPoints(anchor)" :key="pointIndex">
+                          <span>相似点 {{ pointIndex+1 }} · {{ similarityText(point.similarity) }}</span>
+                          <p>查询：{{ point.query_text ?? point.queryText }}</p>
+                          <p>候选：{{ point.candidate_text ?? point.candidateText }}</p>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                  <el-empty v-else description="当前案例未形成满足阈值的事件锚点" :image-size="54" />
+                </section>
+              </div>
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -84,7 +148,7 @@ const page=computed(()=>({...configs[String(route.meta.processingPage||'report')
 const loading=ref(false),processing=ref(false),records=ref<any[]>([]),selected=ref<any[]>([]),total=ref(0),pageNum=ref(1),pageSize=ref(10)
 const filters=reactive({caseId:'',scenarioCode:''})
 const detailVisible=ref(false),detailLoading=ref(false),detail=ref<any>({}),activeTab=ref('basic'),reportText=ref(''),savingReport=ref(false),approving=ref(false),finalRisk=ref('')
-const basicSections=ref(['basic_info']),frameworkSections=ref(['basic_info']),orderedMatches=ref<any[]>([])
+const basicSections=ref(['basic_info']),frameworkSections=ref(['basic_info']),orderedMatches=ref<any[]>([]),expandedMatches=ref<string[]>([])
 const layerLabels=['案例基本信息','实体层','事件层','关系层','证据层']
 const sourceLabels:any={basic_info:'基本信息',customers:'客户',transaction_features:'交易特征',accounts:'账户',other_entities:'其他实体',devices:'设备',event_chain:'事件链',text_analysis:'分析文本'}
 const extractionLabels:any={basic_info:'案例基本信息',customers:'客户',accounts:'账户',other_entities:'其他实体',events:'事件',relationships:'关系',evidences:'证据'}
@@ -96,16 +160,30 @@ const statusType=(value:string)=>({PENDING_REPORT:'info',PENDING_EXTRACTION:'war
 const riskText=(value:string)=>({LOW:'低风险',MEDIUM:'中风险',HIGH:'高风险'} as any)[value]||'未定级'
 const riskType=(value:string)=>({LOW:'info',MEDIUM:'warning',HIGH:'danger'} as any)[value]||'info'
 const similarityText=(value:any)=>{const number=Number(value||0);return `${(number<=1?number*100:number).toFixed(1)}%`}
+const decimalText=(value:any)=>Number.isFinite(Number(value))?Number(value).toFixed(4):'—'
+const matchKey=(item:any,index:number)=>String(item.caseId||item.case_id||`${item.caseName||'case'}-${index}`)
+const isMatchExpanded=(item:any,index:number)=>expandedMatches.value.includes(matchKey(item,index))
+function toggleMatch(item:any,index:number){const key=matchKey(item,index);expandedMatches.value=isMatchExpanded(item,index)?expandedMatches.value.filter(value=>value!==key):[...expandedMatches.value,key]}
+const matchedGraph=(item:any)=>item.matchedSubgraph||item.matched_subgraph||{}
+const matchedValue=(item:any,camelKey:string,snakeKey:string)=>matchedGraph(item)[camelKey]??matchedGraph(item)[snakeKey]??0
+const eventSummary=(item:any)=>item.eventSimilaritySummary||item.event_similarity_summary||{}
+const eventAnchors=(item:any)=>eventSummary(item).similar_points||eventSummary(item).similarPoints||[]
+const commonPoints=(anchor:any)=>anchor.common_description_points||anchor.commonDescriptionPoints||[]
+function eventField(anchor:any,side:'query'|'candidate',field:string){const event=anchor[`${side}_event`]||anchor[`${side}Event`]||{};const camelField=field.replace(/_([a-z])/g,(_,letter)=>letter.toUpperCase());return event[field]??event[camelField]}
 async function load(){loading.value=true;try{const response:any=await getCaseProcessingApi({stage:page.value.stage,pageNum:pageNum.value,pageSize:pageSize.value,caseId:filters.caseId||undefined,scenarioCode:filters.scenarioCode||undefined});records.value=response.data?.records||[];total.value=response.data?.total||0;selected.value=[]}finally{loading.value=false}}
 const search=()=>{pageNum.value=1;load()},reset=()=>{filters.caseId='';filters.scenarioCode='';search()}
 async function runBatch(){processing.value=true;try{const response:any=await processCasesApi(page.value.action,selected.value.map(item=>item.caseId));ElMessage.success(`处理完成：成功 ${response.data?.succeeded||0}，失败 ${response.data?.failed||0}`);await load()}finally{processing.value=false}}
-async function openDetail(row:any){detailVisible.value=true;detailLoading.value=true;try{const response:any=await getCaseProcessingDetailApi(row.caseId);detail.value=response.data||{};reportText.value=detail.value.suspiciousReport?.analysisText||Object.values(detail.value.suspiciousReport?.analysisTexts||{}).join('\n\n');finalRisk.value=detail.value.recommendedRiskLevel||'';const matches=detail.value.similarityResult?.matches||detail.value.similarityResult?.similarCases||[];const rankMap=new Map((detail.value.similarityRanking||[]).map((item:any)=>[item.caseId,item]));orderedMatches.value=[...matches].map((item:any)=>({...item,...(rankMap.get(item.caseId)||{})})).sort((a:any,b:any)=>(a.finalRank||a.rank||99)-(b.finalRank||b.rank||99));activeTab.value=page.value.key==='framework'?'basic':page.value.key==='similarity'?'framework':page.value.key==='approval'?(detail.value.suspiciousReport?'report':detail.value.frameworkResult?'framework':'basic'):'basic'}finally{detailLoading.value=false}}
-async function saveReport(){savingReport.value=true;try{await updateProcessingReportApi(detail.value.caseId,reportText.value);ElMessage.success('可疑报告已保存，案例已放回框架抽取页面');detailVisible.value=false;await load()}finally{savingReport.value=false}}
+async function openDetail(row:any){detailVisible.value=true;detailLoading.value=true;expandedMatches.value=[];try{const response:any=await getCaseProcessingDetailApi(row.caseId);detail.value=response.data||{};reportText.value=detail.value.suspiciousReport?.analysisText||Object.values(detail.value.suspiciousReport?.analysisTexts||{}).join('\n\n');finalRisk.value=detail.value.recommendedRiskLevel||'';const matches=detail.value.similarityResult?.matches||detail.value.similarityResult?.similarCases||[];const rankMap=new Map((detail.value.similarityRanking||[]).map((item:any)=>[item.caseId,item]));orderedMatches.value=[...matches].map((item:any)=>({...item,...(rankMap.get(item.caseId)||{})})).sort((a:any,b:any)=>(a.finalRank||a.rank||99)-(b.finalRank||b.rank||99));activeTab.value=page.value.key==='framework'?'basic':page.value.key==='similarity'?'framework':page.value.key==='approval'?(detail.value.suspiciousReport?'report':detail.value.frameworkResult?'framework':'basic'):'basic'}finally{detailLoading.value=false}}
+async function saveReport(){savingReport.value=true;try{await updateProcessingReportApi(detail.value.caseId,reportText.value);ElMessage.success('保存成功，案例已进入框架抽取队列，请在框架抽取页面手动开始');detailVisible.value=false;await load()}finally{savingReport.value=false}}
 function move(index:number,delta:number){const target=index+delta;[orderedMatches.value[index],orderedMatches.value[target]]=[orderedMatches.value[target],orderedMatches.value[index]]}
 async function approve(){if(!finalRisk.value)return ElMessage.warning('请选择低风险、中风险或高风险');approving.value=true;try{await approveProcessingCaseApi(detail.value.caseId,finalRisk.value as any,orderedMatches.value.map(item=>item.caseId));ElMessage.success('审核通过，案例已进入全景图谱');detailVisible.value=false;await load()}finally{approving.value=false}}
 watch([pageNum,pageSize],load);watch(()=>route.meta.processingPage,()=>{pageNum.value=1;load()});onMounted(load)
 </script>
 
 <style scoped>
-.processing-page{height:100%}.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.page-header h2{margin:0 0 5px}.page-header p{margin:0;color:#64748b}.filters{display:flex}.selection-bar{margin:8px 0;padding:10px 14px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;color:#334155}.processing-page :deep(.clickable-row){cursor:pointer}.processing-page :deep(.el-pagination){justify-content:flex-end;margin-top:18px}.detail-body{min-height:480px}.detail-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}.detail-toolbar .el-select{margin-left:auto;width:150px}.risk-label{margin-left:auto;color:#64748b;font-size:13px}.risk-label+.el-tag+.el-select{margin-left:0}.json-panel{max-height:430px;overflow:auto;margin:0;padding:14px;border-radius:8px;background:#f5f7fa;color:#334155;white-space:pre-wrap;word-break:break-word}.report-actions{display:flex;justify-content:flex-end;margin-top:12px}.five-layer-strip{display:flex;gap:8px;margin-bottom:14px}.five-layer-strip span{display:flex;align-items:center;gap:8px;flex:1;padding:12px;border:1px solid #dbeafe;border-radius:9px;color:#1e3a5f;font-weight:600}.five-layer-strip i{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:8px;background:#e0edff;color:#2563eb;font-style:normal}.match-row{display:flex;align-items:center;gap:14px;margin-top:10px;padding:13px 15px;border:1px solid #dbe3ef;border-radius:9px}.match-row b{color:#2563eb}.match-row span{flex:1}.match-row em{color:#64748b;font-style:normal}.match-row div{display:flex;gap:6px}
+.processing-page{height:100%}.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.page-header h2{margin:0 0 5px}.page-header p{margin:0;color:#64748b}.filters{display:flex}.selection-bar{margin:8px 0;padding:10px 14px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;color:#334155}.processing-page :deep(.clickable-row){cursor:pointer}.processing-page :deep(.el-pagination){justify-content:flex-end;margin-top:18px}.detail-body{min-height:480px}.detail-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}.detail-toolbar .el-select{margin-left:auto;width:150px}.risk-label{margin-left:auto;color:#64748b;font-size:13px}.risk-label+.el-tag+.el-select{margin-left:0}.json-panel{max-height:430px;overflow:auto;margin:0;padding:14px;border-radius:8px;background:#f5f7fa;color:#334155;white-space:pre-wrap;word-break:break-word}.report-actions{display:flex;justify-content:flex-end;margin-top:12px}.five-layer-strip{display:flex;gap:8px;margin-bottom:14px}.five-layer-strip span{display:flex;align-items:center;gap:8px;flex:1;padding:12px;border:1px solid #dbeafe;border-radius:9px;color:#1e3a5f;font-weight:600}.five-layer-strip i{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:8px;background:#e0edff;color:#2563eb;font-style:normal}
+.match-card{margin-top:10px;border:1px solid #dbe3ef;border-radius:10px;overflow:hidden;transition:border-color .2s,box-shadow .2s}.match-card.expanded{border-color:#a9c9f7;box-shadow:0 8px 24px rgba(37,99,235,.08)}.match-row{display:flex;align-items:center;gap:14px;padding:13px 15px;cursor:pointer;outline:none}.match-row:focus-visible{box-shadow:inset 0 0 0 2px #409eff}.match-row b{color:#2563eb}.match-row>span:first-of-type{flex:1}.match-row em{color:#64748b;font-style:normal;white-space:nowrap}.match-actions{display:flex;gap:6px}.match-toggle{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;min-width:78px;color:#2563eb;font-size:13px;white-space:nowrap}.match-toggle i{font-style:normal;transition:transform .2s}.expanded .match-toggle i{transform:rotate(180deg)}
+.match-detail{padding:18px;border-top:1px solid #e5edf7;background:linear-gradient(135deg,#f7faff,#fffaf3)}.match-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.match-metrics>div{display:flex;flex-direction:column;gap:5px;padding:13px;border:1px solid #e0e8f2;border-radius:10px;background:#fff}.match-metrics small{color:#64748b}.match-metrics strong{color:#174b82;font-size:20px}.match-metrics span{color:#94a3b8;font-size:11px;line-height:1.4}.match-counts{display:flex;gap:22px;padding:13px 2px 4px;color:#64748b;font-size:13px}.match-counts strong{color:#334155}
+.event-similarity-panel{margin-top:12px;padding:17px;border:1px solid #d9e3f0;border-radius:13px;background:rgba(255,255,255,.72)}.event-similarity-head{display:flex;align-items:center;justify-content:space-between}.event-similarity-head small{color:#8090a3;font-size:10px;letter-spacing:.14em}.event-similarity-head h4{margin:4px 0 0;color:#173f69;font-size:17px}.event-summary{margin:10px 0 0;color:#64748b;font-size:13px}.event-anchor-list{display:grid;gap:12px;margin-top:14px}.event-anchor-card{overflow:hidden;border:1px solid #dde5ee;border-left:4px solid #d99a2b;border-radius:11px;background:#fff}.event-anchor-card>header{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid #edf1f5;background:#fbfcfe}.event-anchor-card>header>span{margin-left:auto;color:#64748b;font-size:12px}.event-compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:13px}.event-side{min-width:0;padding:12px;border:1px solid #dce5ef;border-radius:10px}.query-side{border-top:3px solid #2563eb}.candidate-side{border-top:3px solid #7c3aed}.event-side small{color:#64748b;font-weight:700}.event-side h5{margin:7px 0;font-size:14px;line-height:1.45}.event-side p{margin:9px 0 0;color:#475569;font-size:12px;line-height:1.7;word-break:break-word}.common-points{margin:0 13px 13px;padding:12px;border-radius:9px;background:#f8fafc;color:#475569;font-size:12px}.common-points>b{display:block;margin-bottom:8px;color:#334155}.common-points>div{margin-top:8px;padding-left:10px;border-left:3px solid #f2c94c}.common-points span{font-weight:600;color:#8a6200}.common-points p{margin:4px 0;line-height:1.55}
+@media(max-width:900px){.match-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.event-compare-grid{grid-template-columns:1fr}.match-row{flex-wrap:wrap}.match-row>span:first-of-type{min-width:55%}}
 </style>

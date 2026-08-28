@@ -167,6 +167,75 @@ class EventRagTests(unittest.TestCase):
         self.assertEqual(1, len(unique))
         self.assertEqual(1, len(report))
 
+    def test_declared_historical_event_codes_map_to_kb_names(self) -> None:
+        extractor = EventExtractor(self.kb_path)
+        events = [
+            {
+                "event_id": "0000002",
+                "event_name": "编号占位",
+                "event_type": "模型自拟类型",
+                "event_description": "2026年2月客户将资金循环转回原账户。",
+                "event_start_date": "2026-02-01",
+                "involved_entities": ["CUST001"],
+            },
+            {
+                "event_id": "0000001",
+                "event_name": "编号占位",
+                "event_type": "模型自拟类型",
+                "event_description": "2026年1月客户在短期内发生高频交易。",
+                "event_start_date": "2026-01-01",
+                "involved_entities": ["CUST001"],
+            },
+        ]
+
+        aligned = extractor._align_declared_event_types(
+            {"basic_info": {"suspicious_transaction_codes": "ET002、ET020"}},
+            events,
+        )
+        by_date = sorted(aligned, key=lambda item: item["event_start_date"])
+
+        self.assertEqual(["ET002", "ET020"], [item["event_type_id"] for item in by_date])
+        self.assertEqual(
+            ["短期高频交易", "循环或回流交易"],
+            [item["event_type"] for item in by_date],
+        )
+        self.assertTrue(all(item["event_name"] != item["event_type_id"] for item in by_date))
+        self.assertTrue(all("CUST001" in item["event_name"] for item in by_date))
+
+    def test_structured_patterns_produce_one_governed_event_per_pattern(self) -> None:
+        extractor = EventExtractor(self.kb_path)
+        state = {
+            "basic_info": {
+                "disposition_measures": "增强尽职调查",
+                "suspicious_pattern_details": [{
+                    "event_id": "0000001",
+                    "event_type_id": "ET020",
+                    "subject_entity_id": "CUST001",
+                    "subject_name": "张某",
+                    "account_ids": ["ACCT001", "ACCT002"],
+                    "account_numbers": ["62220001", "62220002"],
+                    "event_start_date": "2026-01-01",
+                    "event_end_date": "2026-01-03",
+                    "total_amount_cny": 500000,
+                    "transaction_ids": ["TX001", "TX002"],
+                    "behavior_chain": "资金经关联账户转移后回流。",
+                    "fact": "形成闭合资金路径",
+                    "risk_indicator": "回流金额500000元",
+                    "source_fact_summary": "两笔交易流水与设备日志相互印证。",
+                }],
+            }
+        }
+
+        result = extractor.process(state)
+
+        self.assertEqual("structured_pattern_metadata", result["event_extraction_mode"])
+        self.assertEqual(1, len(result["events"]))
+        event = result["events"][0]
+        self.assertEqual("循环或回流交易", event["event_type"])
+        self.assertEqual("张某控制的账户呈现循环或回流交易行为", event["event_name"])
+        self.assertEqual(["CUST001", "ACCT001", "ACCT002"], event["involved_entities"])
+        self.assertIn("500000", event["event_description"])
+
     def test_source_fact_fallback_prevents_unexplained_zero_events(self) -> None:
         extractor = EventExtractor(self.kb_path)
         state = {

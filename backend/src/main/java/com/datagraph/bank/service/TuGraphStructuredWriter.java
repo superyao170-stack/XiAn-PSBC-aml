@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class TuGraphStructuredWriter {
@@ -24,6 +25,7 @@ public class TuGraphStructuredWriter {
     private final Driver structuredDriver;
     private final ContractProjectionService contractProjectionService;
     private final EventSemanticEnrichmentService eventSemanticEnrichmentService;
+    private final AtomicBoolean frameworkSchemaReady = new AtomicBoolean(false);
 
     public TuGraphStructuredWriter(JdbcTemplate jdbc, ContractProjectionService contractProjectionService,
             EventSemanticEnrichmentService eventSemanticEnrichmentService,
@@ -595,6 +597,208 @@ public class TuGraphStructuredWriter {
         session.run("MATCH (a {graphId:'" + cypherLiteral(sourceGraphId)
                 + "'}),(b {graphId:'" + cypherLiteral(targetGraphId)
                 + "'}) MERGE (a)-[r:" + type + "]->(b)").consume();
+    }
+
+    public Map<String,Object> writeFrameworkCase(String caseId, String bankCode,
+                                                  long workspaceId, JsonNode framework) {
+        eventSemanticEnrichmentService.enrichCase(caseId);
+        contractProjectionService.captureCase(caseId);
+        ensureFrameworkSchema();
+        try (var session = structuredDriver.session(SessionConfig.forDatabase("BankGraph"))) {
+            // A new historical case is the overwhelmingly common path.  Probe the
+            // Case primary key first so imports do not rescan the entire graph for
+            // a case-scoped delete on every row.  Reruns remain idempotent.
+            boolean existingCase = session.run("MATCH (n:Case {graphId:$caseId}) RETURN n LIMIT 1",
+                    Map.of("caseId", caseId)).hasNext();
+            if (existingCase) {
+                session.run("MATCH (n) WHERE n.caseId=$caseId DETACH DELETE n",
+                        Map.of("caseId", caseId)).consume();
+                session.run("MATCH (n:Case {graphId:$caseId}) DETACH DELETE n",
+                        Map.of("caseId", caseId)).consume();
+            }
+
+            String caseName = framework.path("basic_info").path("case_name").asText(caseId);
+            String caseSummary = framework.path("basic_info").path("case_description").asText("");
+            session.run("MERGE (n:Case {graphId:'" + cypherLiteral(caseId) + "'}) SET "
+                    + "n.caseId='" + cypherLiteral(caseId) + "',n.bankCode='"
+                    + cypherLiteral(bankCode) + "',n.workspaceId='" + workspaceId
+                    + "',n.nodeType='CASE',n.name='" + cypherLiteral(caseName)
+                    + "',n.summary='" + cypherLiteral(caseSummary) + "'").consume();
+
+            Map<String,String> graphIds = new LinkedHashMap<>();
+            Map<String,String> graphLabels = new LinkedHashMap<>();
+            graphIds.put(caseId, caseId);
+            graphLabels.put(caseId, "Case");
+            int nodeCount = 1;
+            nodeCount += writeFrameworkNodes(session, caseId, bankCode, workspaceId,
+                    framework.path("customers"), "Customer", "CUSTOMER",
+                    List.of("entity_id"), List.of("customer_name", "entity_id"), graphIds, graphLabels);
+            nodeCount += writeFrameworkNodes(session, caseId, bankCode, workspaceId,
+                    framework.path("accounts"), "Account", "ACCOUNT",
+                    List.of("entity_id", "account_number"),
+                    List.of("account_number", "holder_name", "entity_id"), graphIds, graphLabels);
+            nodeCount += writeFrameworkNodes(session, caseId, bankCode, workspaceId,
+                    framework.path("events"), "Event", "EVENT",
+                    List.of("event_id"), List.of("event_name", "event_type", "event_id"), graphIds, graphLabels);
+            nodeCount += writeFrameworkNodes(session, caseId, bankCode, workspaceId,
+                    framework.path("evidences"), "Evidence", "EVIDENCE",
+                    List.of("evidence_id"), List.of("evidence_type", "evidence_id"), graphIds, graphLabels);
+            nodeCount += writeFrameworkNodes(session, caseId, bankCode, workspaceId,
+                    framework.path("other_entities"), "OtherEntity", "OTHER_ENTITY",
+                    List.of("entity_id"), List.of("entity_attr_1", "entity_id"), graphIds, graphLabels);
+
+            int edgeCount = 0;
+            int generatedRelationshipIndex = 0;
+            List<Map<String,Object>> edgeRows = new ArrayList<>();
+            JsonNode relationships = framework.path("relationships");
+            if (relationships.isArray()) for (JsonNode relationship : relationships) {
+                String sourceId = relationship.path("source_node_id").asText("");
+                String targetId = relationship.path("target_node_id").asText("");
+                String sourceGraphId = graphIds.get(sourceId);
+                String targetGraphId = graphIds.get(targetId);
+                if (sourceGraphId == null || targetGraphId == null) continue;
+                String relationId = valueOr(relationship.path("relationship_id").asText(),
+                        "REL-" + (++generatedRelationshipIndex));
+                String relationType = relationship.path("relationship_type").asText("关联关系");
+                String summary = relationship.path("relationship_description").asText("");
+                addFrameworkEdgeRow(edgeRows, graphLabels, sourceGraphId, targetGraphId,
+                        caseId + "::" + relationId, relationType, summary);
+                edgeCount++;
+            }
+            for (Map.Entry<String,String> entry : graphIds.entrySet()) {
+                if (entry.getKey().equals(caseId)) continue;
+                addFrameworkEdgeRow(edgeRows, graphLabels, caseId, entry.getValue(),
+                        caseId + "::CONTAINS::" + entry.getKey(), "案例包含", "案例框架节点");
+                edgeCount++;
+            }
+            writeFrameworkEdges(session, edgeRows);
+            return Map.of("engine", "TUGRAPH", "nodes", nodeCount, "edges", edgeCount);
+        }
+    }
+
+    private void ensureFrameworkSchema() {
+        if (frameworkSchemaReady.get()) return;
+        synchronized (frameworkSchemaReady) {
+            if (frameworkSchemaReady.get()) return;
+            try (var admin = structuredDriver.session()) {
+                try {
+                    admin.run("CALL dbms.graph.createGraph('BankGraph','bankgraph structured AML graph',1024)").consume();
+                } catch (Exception ignored) { /* graph already exists */ }
+            }
+            try (var session = structuredDriver.session(SessionConfig.forDatabase("BankGraph"))) {
+                for (String label : List.of("Case", "Customer", "Account", "Event", "Evidence", "OtherEntity")) {
+                    try {
+                        session.run("CALL db.createVertexLabel('" + label
+                                + "','graphId','graphId','string',false,'caseId','string',true,"
+                                + "'bankCode','string',true,'workspaceId','string',true,"
+                                + "'nodeType','string',true,'name','string',true,"
+                                + "'summary','string',true,'eventName','string',true,"
+                                + "'eventType','string',true,'eventText','string',true)").consume();
+                    } catch (Exception ignored) { /* label already exists */ }
+                }
+                try {
+                    session.run("CALL db.createEdgeLabel('RELATES_TO','[]','graphId','string',true,"
+                            + "'relationType','string',true,'summary','string',true)").consume();
+                } catch (Exception ignored) { /* label already exists */ }
+                try {
+                    // Pair-unique keeps distinct relationship ids between the
+                    // same endpoints and enables TuGraph's native bulk upsert.
+                    session.run("CALL db.addEdgeIndex('RELATES_TO','graphId',false,true)").consume();
+                } catch (Exception ignored) { /* index already exists */ }
+            }
+            frameworkSchemaReady.set(true);
+        }
+    }
+
+    private int writeFrameworkNodes(org.neo4j.driver.Session session, String caseId,
+                                    String bankCode, long workspaceId, JsonNode nodes,
+                                    String label, String nodeType, List<String> idFields,
+                                    List<String> nameFields, Map<String,String> graphIds,
+                                    Map<String,String> graphLabels) {
+        if (!nodes.isArray()) return 0;
+        List<Map<String,Object>> rows = new ArrayList<>();
+        for (JsonNode node : nodes) {
+            String nodeId = firstText(node, idFields);
+            if (nodeId.isBlank()) continue;
+            String graphId = caseId + "::" + nodeId;
+            graphIds.put(nodeId, graphId);
+            graphLabels.put(graphId, label);
+            String name = firstText(node, nameFields);
+            String summary = firstText(node, List.of(
+                    "event_description", "original_data", "description", "summary"));
+            String eventName = "Event".equals(label) ? node.path("event_name").asText("") : "";
+            String eventType = "Event".equals(label) ? node.path("event_type").asText("") : "";
+            rows.add(Map.of(
+                    "graphId", graphId, "caseId", caseId, "bankCode", bankCode,
+                    "workspaceId", Long.toString(workspaceId), "nodeType", nodeType,
+                    "name", name, "summary", summary, "eventName", eventName,
+                    "eventType", eventType, "eventText", summary));
+        }
+        if (!rows.isEmpty()) {
+            session.run("CALL db.upsertVertex('" + label + "',$rows)",
+                    Map.of("rows", rows)).consume();
+        }
+        return rows.size();
+    }
+
+    private void addFrameworkEdgeRow(List<Map<String,Object>> rows,
+                                     Map<String,String> graphLabels,
+                                     String sourceGraphId, String targetGraphId,
+                                     String relationshipId, String relationType, String summary) {
+        String sourceLabel = graphLabels.get(sourceGraphId);
+        String targetLabel = graphLabels.get(targetGraphId);
+        if (sourceLabel == null || targetLabel == null) return;
+        rows.add(Map.of(
+                "sourceGraphId", sourceGraphId, "targetGraphId", targetGraphId,
+                "sourceLabel", sourceLabel, "targetLabel", targetLabel,
+                "graphId", relationshipId, "relationType", relationType,
+                "summary", summary));
+    }
+
+    private void writeFrameworkEdges(org.neo4j.driver.Session session,
+                                     List<Map<String,Object>> rows) {
+        Map<String,List<Map<String,Object>>> grouped = new LinkedHashMap<>();
+        for (Map<String,Object> row : rows) {
+            String key = row.get("sourceLabel") + "\u0000" + row.get("targetLabel");
+            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(row);
+        }
+        for (Map.Entry<String,List<Map<String,Object>>> entry : grouped.entrySet()) {
+            String[] labels = entry.getKey().split("\u0000", -1);
+            List<Map<String,Object>> upsertRows = entry.getValue().stream()
+                    .map(row -> Map.<String,Object>of(
+                            "sourceGraphId", row.get("sourceGraphId"),
+                            "targetGraphId", row.get("targetGraphId"),
+                            "graphId", row.get("graphId"),
+                            "relationType", row.get("relationType"),
+                            "summary", row.get("summary")))
+                    .toList();
+            session.run("CALL db.upsertEdge('RELATES_TO',"
+                            + "{type:'" + labels[0] + "',key:'sourceGraphId'},"
+                            + "{type:'" + labels[1] + "',key:'targetGraphId'},$rows,'graphId')",
+                    Map.of("rows", upsertRows)).consume();
+        }
+    }
+
+    private void mergeFrameworkEdge(org.neo4j.driver.Session session, String sourceGraphId,
+                                    String targetGraphId, String relationshipId,
+                                    String relationType, String summary) {
+        session.run("MATCH (a {graphId:'" + cypherLiteral(sourceGraphId)
+                + "'}),(b {graphId:'" + cypherLiteral(targetGraphId)
+                + "'}) MERGE (a)-[r:RELATES_TO {graphId:'" + cypherLiteral(relationshipId)
+                + "'}]->(b) SET r.relationType='" + cypherLiteral(relationType)
+                + "',r.summary='" + cypherLiteral(summary) + "'").consume();
+    }
+
+    private String firstText(JsonNode node, List<String> fields) {
+        for (String field : fields) {
+            String value = node.path(field).asText("").trim();
+            if (!value.isBlank()) return value;
+        }
+        return "";
+    }
+
+    private String valueOr(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     public void removeCaseSubgraph(String caseId) {

@@ -109,6 +109,7 @@ class EventExtractor:
         llm_client: Optional[DeepSeekLLMClient] = None,
         embedding_weight: float = 0.45,
         prompt_path: Optional[Path] = None,
+        qdrant_collection: Optional[str] = None,
     ) -> None:
         self.kb_path = Path(kb_path)
         self.risk_threshold = risk_threshold
@@ -119,7 +120,10 @@ class EventExtractor:
         self.prompt_path = Path(prompt_path) if prompt_path else None
         self.prompt_template = self._load_prompt_template()
         self.event_kb = load_json(self.kb_path, default={"event_types": []})
-        self.knowledge_repository = create_knowledge_repository(json_path=self.kb_path)
+        self.knowledge_repository = create_knowledge_repository(
+            json_path=self.kb_path,
+            qdrant_collection=qdrant_collection,
+        )
         self.knowledge_base_backend = self.knowledge_repository.backend
         self.knowledge_base_reference = (
             f"qdrant://{self.knowledge_repository.collection}"
@@ -140,6 +144,21 @@ class EventExtractor:
 
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         self.event_counter = 0
+        declared_events = self._events_from_declared_patterns(state)
+        if declared_events is not None:
+            return {
+                "event_candidates": [],
+                "knowledge_base_recall_results": [],
+                "event_extraction_calls": [{
+                    "status": "SUCCEEDED",
+                    "method": "structured_pattern_metadata",
+                    "event_count": len(declared_events),
+                    "note": "历史案例的独立可疑模式已由结构化交易事实声明，逐笔交易保留为证据，不拆分为额外事件。",
+                }],
+                "event_extraction_mode": "structured_pattern_metadata",
+                "event_deduplication_report": [],
+                "events": declared_events,
+            }
         candidates = self._extract_candidates(state)
         retrieval_results: List[Dict[str, Any]] = []
 
@@ -193,6 +212,7 @@ class EventExtractor:
         numbered_events = self._renumber_events(filled_events)
         final_events, dedup_report = self._deduplicate(numbered_events)
         final_events = self._renumber_events(final_events)
+        final_events = self._align_declared_event_types(state, final_events)
         return {
             "event_candidates": candidates,
             "knowledge_base_recall_results": retrieval_results,
@@ -201,6 +221,141 @@ class EventExtractor:
             "event_deduplication_report": dedup_report,
             "events": final_events,
         }
+
+    def _events_from_declared_patterns(
+        self, state: Dict[str, Any]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Build one governed event per explicitly declared historical pattern."""
+
+        basic_info = state.get("basic_info") or {}
+        details = basic_info.get("suspicious_pattern_details")
+        if details is None:
+            return None
+        if not isinstance(details, list) or not details:
+            return None
+        by_id = {str(item.get("id") or ""): item for item in self.event_types}
+        events: List[Dict[str, Any]] = []
+        for index, detail in enumerate(details, start=1):
+            if not isinstance(detail, dict):
+                return None
+            code = str(detail.get("event_type_id") or "").strip()
+            metadata = by_id.get(code)
+            if metadata is None:
+                return None
+            event_type = str(metadata.get("name") or code)
+            subject_id = str(detail.get("subject_entity_id") or "").strip()
+            subject_name = str(detail.get("subject_name") or subject_id or "明确主体").strip()
+            account_ids = [
+                str(value).strip()
+                for value in (detail.get("account_ids") or [])
+                if str(value).strip()
+            ]
+            account_numbers = [
+                str(value).strip()
+                for value in (detail.get("account_numbers") or [])
+                if str(value).strip()
+            ]
+            start_date = str(detail.get("event_start_date") or "").strip()
+            end_date = str(detail.get("event_end_date") or "").strip()
+            amount = detail.get("total_amount_cny")
+            chain = str(detail.get("behavior_chain") or "").strip()
+            fact = str(detail.get("fact") or "").strip()
+            fact_source = str(
+                detail.get("source_fact_summary")
+                or detail.get("evidence_summary")
+                or ""
+            ).strip()
+            description = (
+                f"{start_date}至{end_date}，{subject_name}控制的账户"
+                f"{('、'.join(account_numbers))}累计发生"
+                f"{len(detail.get('transaction_ids') or [])}笔重点交易、金额{amount}元；"
+                f"{chain}{fact}。事实来源：{fact_source}"
+            )
+            involved_entities = ([subject_id] if subject_id else []) + account_ids
+            event_name = f"{subject_name}控制的账户呈现{event_type}行为"
+            risk_indicator = str(detail.get("risk_indicator") or "").strip()
+            events.append({
+                "event_id": str(detail.get("event_id") or f"{index:07d}"),
+                "event_name": event_name,
+                "event_type_id": code,
+                "event_type": event_type,
+                "event_description": description,
+                "event_start_date": start_date,
+                "event_end_date": end_date,
+                "recognition_rule": (
+                    f"知识库标记：已有；知识库事件类型：{code}/{event_type}；"
+                    "类型依据：basic_info 中独立可疑模式的结构化交易事实；"
+                    f"事实依据：{description}"
+                ),
+                "product_service": self._infer_product_service(description) or "账户转账",
+                "value_tool": self._infer_value_tool(description) or "银行账户",
+                "risk_type": str(metadata.get("category") or "交易行为风险"),
+                "risk_indicator": risk_indicator,
+                "disposition_measures": str(basic_info.get("disposition_measures") or ""),
+                "source_text_name": "basic_info.suspicious_pattern_details",
+                "source_section": f"独立可疑模式{index}",
+                "source_text": description,
+                "involved_entities": involved_entities,
+                "metrics": {
+                    "amount_cny": amount,
+                    "transaction_count": len(detail.get("transaction_ids") or []),
+                },
+                "confidence_score": 0.99,
+                "reason": "结构化模式、逐笔流水与知识库代码一一对应",
+                "reason_steps": [
+                    "读取结构化独立可疑模式",
+                    f"校验知识库事件类型 {code}/{event_type}",
+                    "逐笔交易保留为证据，未扩张为额外事件",
+                ],
+                "retrieval_method": "declared_structured_pattern",
+                "needs_llm_review": False,
+                "llm_reviewed": False,
+                "duplicate_of": None,
+            })
+        return sorted(events, key=lambda item: (
+            item.get("event_start_date") or "9999-99-99",
+            item.get("event_id") or "",
+        ))
+
+    def _align_declared_event_types(
+        self, state: Dict[str, Any], events: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Honor an explicit one-to-one event-code declaration from basic_info.
+
+        Historical reports may state four independent patterns and preserve the
+        authoritative KB codes in structured case metadata.  When the extracted
+        event count matches that declaration exactly, align chronologically so
+        the public event type uses the KB name rather than an LLM-created label.
+        """
+        basic_info = state.get("basic_info") or {}
+        declared = re.findall(
+            r"ET\d+", str(basic_info.get("suspicious_transaction_codes") or "")
+        )
+        if not declared or len(declared) != len(events) or len(set(declared)) != len(declared):
+            return events
+        by_id = {str(item.get("id") or ""): item for item in self.event_types}
+        if any(code not in by_id for code in declared):
+            return events
+        ordered = sorted(
+            events,
+            key=lambda item: (
+                str(item.get("event_start_date") or "9999-99-99"),
+                str(item.get("event_id") or ""),
+            ),
+        )
+        for event, code in zip(ordered, declared):
+            metadata = by_id[code]
+            event_type = str(metadata.get("name") or code)
+            entities = event.get("involved_entities") or []
+            event["event_type_id"] = code
+            event["event_type"] = event_type
+            event["event_name"] = self._canonical_existing_event_name(entities, event_type)
+            event["recognition_rule"] = (
+                f"知识库标记：已有；知识库事件类型：{code}/{event_type}；"
+                "类型依据：basic_info 明确声明且与报告中的独立事件按日期一一对应；"
+                f"事实依据：{event.get('event_description') or ''}"
+            )
+        return events
 
     def _extract_document_events_with_llm(
         self,
@@ -771,9 +926,8 @@ class EventExtractor:
                 normalized["event_name"],
             )
             normalized["event_type"] = summarized_type
-            normalized["event_name"] = (
-                f"{self._entity_prefix(involved_entities)}"
-                f"{summarized_type}事件（新增）"
+            normalized["event_name"] = self._event_sentence_name(
+                involved_entities, summarized_type, is_new=True
             )
         metrics = self._extract_metrics(
             f"{normalized['event_description']} {normalized['risk_indicator']}"
@@ -980,7 +1134,6 @@ class EventExtractor:
         dates = candidate.get("dates") or []
         metrics = candidate.get("metrics") or {}
         entities = candidate.get("involved_entities") or []
-        entity_prefix = self._entity_prefix(entities)
         description = self._clean_event_description(candidate["candidate_text"])
         rule = event_type.get("rule") or "；".join(event_type.get("rules") or [])
 
@@ -1000,7 +1153,9 @@ class EventExtractor:
 
         return {
             "event_id": f"{self.event_counter:07d}",
-            "event_name": f"{entity_prefix}{event_type.get('name')}事件",
+            "event_name": self._event_sentence_name(
+                entities, str(event_type.get("name") or "异常资金活动")
+            ),
             "event_type_id": event_type.get("id"),
             "event_type": event_type.get("name"),
             "event_description": description,
@@ -1047,7 +1202,6 @@ class EventExtractor:
         dates = candidate.get("dates") or []
         metrics = candidate.get("metrics") or {}
         event_type = self._summarize_new_event_type(description)
-        entity_prefix = self._entity_prefix(entities)
         closest = (
             f"；最相近知识库候选：{top_hit.event_type.get('id')}/"
             f"{top_hit.event_type.get('name')}，仅作召回参考"
@@ -1066,7 +1220,9 @@ class EventExtractor:
         ]
         return {
             "event_id": f"{self.event_counter:07d}",
-            "event_name": f"{entity_prefix}{event_type}事件（新增）",
+            "event_name": self._event_sentence_name(
+                entities, event_type, is_new=True
+            ),
             "event_type_id": None,
             "event_type": event_type,
             "event_description": description,
@@ -1181,7 +1337,17 @@ class EventExtractor:
         entities: Sequence[str],
         event_type: str,
     ) -> str:
-        return f"{self._entity_prefix(entities)}{event_type}事件"
+        return self._event_sentence_name(entities, event_type)
+
+    def _event_sentence_name(
+        self,
+        entities: Sequence[str],
+        event_type: str,
+        is_new: bool = False,
+    ) -> str:
+        subject = self._entity_prefix(entities) or "明确主体"
+        suffix = "（新增）" if is_new else ""
+        return f"{subject}控制的账户呈现{event_type}行为{suffix}"
 
     def _clean_event_description(self, text: str) -> str:
         """Remove report headings/serial numbers and return one prose paragraph."""

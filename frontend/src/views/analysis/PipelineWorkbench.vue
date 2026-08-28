@@ -166,11 +166,6 @@
         </template>
         <template v-else-if="createStep === 3">
           <el-form-item label="任务名称" required><el-input v-model="form.jobName" /></el-form-item>
-          <el-form-item label="数据空间">
-            <el-input :model-value="workspaceDisplay" disabled />
-            <div class="batch-hint">用于隔离不同业务数据范围，不是序号或数据数量；选择已有批次时自动继承该批次的数据空间。</div>
-          </el-form-item>
-          <el-form-item label="案例类型"><el-input :model-value="recognitionCaseTypeLabel" disabled /><div class="batch-hint">由上传场景自动确定，不需人工选择。</div></el-form-item>
           <el-form-item label="银行" required><el-select v-model="form.bankCode" filterable allow-create default-first-option style="width:100%" placeholder="选择或输入银行"><el-option v-for="bank in bankOptions" :key="bank.value" :label="bank.label" :value="bank.value" /></el-select><div class="batch-hint">已带入默认银行，也可以从列表选择或直接输入。</div></el-form-item>
         </template>
         <el-descriptions v-else :column="2" border class="create-confirmation">

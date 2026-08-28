@@ -1,5 +1,9 @@
 package com.datagraph.bank.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.datagraph.bank.common.response.CommonResult;
 import com.datagraph.bank.entity.CfRiskCase;
 import com.datagraph.bank.mapper.CfRiskCaseMapper;
@@ -9,6 +13,7 @@ import com.datagraph.bank.security.CurrentUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,18 +26,63 @@ import static org.mockito.Mockito.*;
 class CaseControllerTest {
     private CfRiskCaseMapper caseMapper;
     private JdbcTemplate jdbcTemplate;
+    private CurrentUser currentUser;
     private CaseController controller;
 
     @BeforeEach
     void setUp() {
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), "case-controller-test"),
+                CfRiskCase.class);
         caseMapper = mock(CfRiskCaseMapper.class);
         jdbcTemplate = mock(JdbcTemplate.class);
+        currentUser = mock(CurrentUser.class);
         controller = new CaseController(
                 caseMapper,
                 mock(CfRiskEventMapper.class),
                 mock(RiskSignalMapper.class),
                 jdbcTemplate,
-                mock(CurrentUser.class));
+                currentUser);
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void platformAdministratorListDoesNotApplyLegacyDefaultBankScope() {
+        when(currentUser.isBankAdmin()).thenReturn(false);
+
+        controller.getCases(1, 10, null, null, null, null, null, null, null);
+
+        var wrapperCaptor = org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(caseMapper).selectPage(any(IPage.class), wrapperCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertFalse(
+                wrapperCaptor.getValue().getCustomSqlSegment().contains("bank_code"));
+        verify(currentUser, never()).scopedBankCode(any());
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void platformAdministratorCanExplicitlyFilterByBank() {
+        when(currentUser.isBankAdmin()).thenReturn(false);
+
+        controller.getCases(1, 10, null, null, null, null, "PSBC-XIAN", null, null);
+
+        var wrapperCaptor = org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(caseMapper).selectPage(any(IPage.class), wrapperCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                wrapperCaptor.getValue().getCustomSqlSegment().contains("bank_code"));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void listCanFilterByScenario() {
+        when(currentUser.isBankAdmin()).thenReturn(false);
+
+        controller.getCases(1, 10, null, null, null, null, null, null, "ANTI_FRAUD");
+
+        var wrapperCaptor = org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(caseMapper).selectPage(any(IPage.class), wrapperCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                wrapperCaptor.getValue().getCustomSqlSegment().contains("scenario_code"));
     }
 
     @Test
@@ -72,14 +122,15 @@ class CaseControllerTest {
     }
 
     @Test
-    void deleteRejectsCaseAlreadyInReview() {
+    void deleteAllowsCaseAlreadyInReview() {
         CfRiskCase existing = caseWithStatus("IN_REVIEW");
         when(caseMapper.selectOne(any())).thenReturn(existing);
+        when(jdbcTemplate.update(contains("UPDATE cf_risk_case"), any(Object[].class))).thenReturn(1);
 
         CommonResult<Void> result = controller.deleteCase(existing.getCaseId());
 
-        assertEquals(409, result.getCode());
-        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
+        assertEquals(200, result.getCode());
+        verify(jdbcTemplate).update(contains("UPDATE cf_risk_case"), any(Object[].class));
     }
 
     @Test

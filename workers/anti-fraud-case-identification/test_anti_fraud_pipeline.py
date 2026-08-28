@@ -7,13 +7,24 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from aml_analysis_workflow.config import WorkflowConfig
 from aml_analysis_workflow.knowledge import KnowledgeBase
 from aml_analysis_workflow.models import CaseInput
 from aml_analysis_workflow.prompt_store import PromptStore
 from channel import CHANNELS
-from framework_extraction import RULE_PATH, load_batch_case_file, load_case_directory, run_pipeline
+from framework_extraction import (
+    RELATIONSHIP_LAYER_ORDER,
+    RELATIONSHIP_TYPE_CONTRACT,
+    RISK_KB_COLLECTION,
+    RISK_KB_PATH,
+    RULE_PATH,
+    load_batch_case_file,
+    load_case_directory,
+    run_pipeline,
+)
+from report_generation import RISK_KB_COLLECTION as REPORT_RISK_KB_COLLECTION
 from fraud_analysis_workflow import (
     FRAUD_INITIAL_NODES,
     FraudAnalysisWorkflow,
@@ -62,8 +73,8 @@ class AntiFraudPipelineTests(unittest.TestCase):
     def _case(self, root: Path, mode: str = "NEW") -> Path:
         values = {
             "basic_info.json": {"case_id": "FRD-TEST-001", "case_name": "测试", "case_trigger": "公安机关涉案账户名单下发"},
-            "customers.json": [{"entity_id": "CUS-1", "customer_name": "张某"}],
-            "accounts.json": [{"entity_id": "ACC-1", "holder_name": "张某"}],
+            "customers.json": [{"entity_id": "CUST-1", "customer_name": "张某"}],
+            "accounts.json": [{"entity_id": "ACCT-1", "holder_name": "张某"}],
             "devices.json": [{"设备号": "DEV-1", "设备名称": "手机", "ip地址": "127.0.0.1"}],
         }
         if mode == "NEW":
@@ -106,7 +117,7 @@ class AntiFraudPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             record = load_case_directory(self._case(Path(directory)), "NEW")
         self.assertEqual("公安机关下发", record["basic_info"]["渠道"])
-        self.assertEqual("ACC-1", record["accounts"][0]["entity_id"])
+        self.assertEqual("ACCT-1", record["accounts"][0]["entity_id"])
         self.assertEqual("DEV-1", record["devices"][0]["设备号"])
 
     def test_police_case_still_applies_row_level_mobile_and_transaction_rules(self) -> None:
@@ -118,6 +129,21 @@ class AntiFraudPipelineTests(unittest.TestCase):
         ]
         rule_ids = {item["rule_id"] for item in engine.build("公安机关下发", events)}
         self.assertTrue({"FRD-MOB-001", "FRD-MOB-002", "FRD-TXN-001", "FRD-TXN-002"} <= rule_ids)
+
+    def test_risk_event_knowledge_base_is_separate_complete_and_compatible(self) -> None:
+        rule_library = json.loads(RULE_PATH.read_text(encoding="utf-8"))
+        risk_kb = json.loads(RISK_KB_PATH.read_text(encoding="utf-8"))
+        entries = risk_kb["event_types"]
+        ids = [str(item["id"]) for item in entries]
+        operational_ids = {str(item["id"]) for item in rule_library["event_types"]}
+        self.assertEqual(risk_kb["metadata"]["event_count"], len(entries))
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertTrue(operational_ids <= set(ids))
+        self.assertTrue(all(set(item) == {"id", "name", "rule", "category"} for item in entries))
+        self.assertIn("source_urls", risk_kb["metadata"])
+        self.assertEqual(5, risk_kb["context_control"]["recommended_top_k"])
+        self.assertNotEqual("risk_event_knowledge_base", RISK_KB_COLLECTION)
+        self.assertEqual(RISK_KB_COLLECTION, REPORT_RISK_KB_COLLECTION)
 
     def test_validate_only_builds_risk_chain_without_llm(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -184,6 +210,61 @@ class AntiFraudPipelineTests(unittest.TestCase):
         generated = workflow.run(self._analysis_case(record))
         self.assertEqual(12, len(generated.paragraphs))
         self.assertGreaterEqual(model.max_active, 2)
+
+    def test_new_case_framework_uses_fraud_kb_and_shared_layered_relationship_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "input"
+            source.mkdir()
+            self._case(source)
+            analysis = {
+                "analysisTexts": {
+                    "analysis_text1": (
+                        "公安机关下发[CUST-1]名下[ACCT-1]涉案线索。"
+                        "[CUST-1]持有[ACCT-1]，新设备登录后发生多头分散转入和资金快进快出，银行已止付。"
+                    )
+                },
+                "analysisText": (
+                    "公安机关下发[CUST-1]名下[ACCT-1]涉案线索。"
+                    "[CUST-1]持有[ACCT-1]，新设备登录后发生多头分散转入和资金快进快出，银行已止付。"
+                ),
+                "generated": True,
+                "source": "TEST_RISK_EVENT_CHAIN",
+                "algorithm": "test",
+                "algorithmVersion": "test",
+            }
+            with (
+                patch("framework_extraction.WORKER_ROOT", root),
+                patch("framework_extraction.generate_analysis", return_value=analysis),
+            ):
+                result = run_pipeline({
+                    "sourcePath": str(source),
+                    "processingMode": "SINGLE",
+                    "recognitionMode": "NEW",
+                    "targetStage": "FRAMEWORK",
+                    "jobId": "TEST-NEW-FRAMEWORK",
+                    "frameworkSettings": {"llmEnabled": False, "corenlpEnabled": False},
+                })
+        framework = result["results"][0]["frameworkExtraction"]
+        metadata = framework["processing_metadata"]
+        self.assertEqual(list(RELATIONSHIP_LAYER_ORDER), metadata["relationship_layer_order"])
+        self.assertEqual(
+            ["entity_entity", "entity_event", "event_event"],
+            [item["stage"] for item in metadata["relationship_extraction_calls"]],
+        )
+        self.assertEqual(
+            {stage: list(types) for stage, types in RELATIONSHIP_TYPE_CONTRACT.items()},
+            metadata["relationship_type_contract"],
+        )
+        allowed_types = {
+            relation_type
+            for values in RELATIONSHIP_TYPE_CONTRACT.values()
+            for relation_type in values
+        }
+        self.assertTrue({item["relationship_type"] for item in framework["relationships"]} <= allowed_types)
+        self.assertEqual("反欺诈风险事件知识库", metadata["risk_event_knowledge_base_audit"]["name"])
+        self.assertEqual(RISK_KB_PATH.resolve(), Path(metadata["risk_event_knowledge_base"]).resolve())
+        self.assertGreater(len(framework["events"]), 0)
 
     @staticmethod
     def _analysis_case(record: dict) -> CaseInput:

@@ -1,0 +1,272 @@
+[
+  {
+    "part": 1,
+    "fileName": "anti_fraud_historical_1500_part_01.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250204-0001",
+    "lastCaseId": "FRD-TXT-20250701-0050",
+    "jobId": "JOB-8272f854-100b-4e60-b630-c1befbb778d2",
+    "status": "PENDING"
+  },
+  {
+    "part": 2,
+    "fileName": "anti_fraud_historical_1500_part_02.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250704-0051",
+    "lastCaseId": "FRD-TXT-20251128-0100",
+    "jobId": "JOB-2c3a7416-d7f7-4695-be2a-63da87c0d55e",
+    "status": "PENDING"
+  },
+  {
+    "part": 3,
+    "fileName": "anti_fraud_historical_1500_part_03.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20251201-0101",
+    "lastCaseId": "FRD-TXT-20260427-0150",
+    "jobId": "JOB-ac102dc4-d90a-4205-9a40-7b3ef159dfd3",
+    "status": "PENDING"
+  },
+  {
+    "part": 4,
+    "fileName": "anti_fraud_historical_1500_part_04.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260430-0151",
+    "lastCaseId": "FRD-TXT-20250303-0200",
+    "jobId": "JOB-16037e29-a6d2-462a-95b2-dd9e8f5830fc",
+    "status": "PENDING"
+  },
+  {
+    "part": 5,
+    "fileName": "anti_fraud_historical_1500_part_05.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250306-0201",
+    "lastCaseId": "FRD-TXT-20250731-0250",
+    "jobId": "JOB-a1e5fc0b-1ace-4ab1-82b4-a0f5ecfee251",
+    "status": "PENDING"
+  },
+  {
+    "part": 6,
+    "fileName": "anti_fraud_historical_1500_part_06.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250803-0251",
+    "lastCaseId": "FRD-TXT-20251228-0300",
+    "jobId": "JOB-22d93ee2-12cc-49cb-8528-747abe64d1a9",
+    "status": "PENDING"
+  },
+  {
+    "part": 7,
+    "fileName": "anti_fraud_historical_1500_part_07.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20251231-0301",
+    "lastCaseId": "FRD-TXT-20260527-0350",
+    "jobId": "JOB-cbf67539-7ef3-4d75-92f7-37674a3ae917",
+    "status": "PENDING"
+  },
+  {
+    "part": 8,
+    "fileName": "anti_fraud_historical_1500_part_08.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260530-0351",
+    "lastCaseId": "FRD-TXT-20250402-0400",
+    "jobId": "JOB-b9386bcc-2ea7-4b92-bfc1-6cfd6c2be1f7",
+    "status": "PENDING"
+  },
+  {
+    "part": 9,
+    "fileName": "anti_fraud_historical_1500_part_09.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250405-0401",
+    "lastCaseId": "FRD-TXT-20250830-0450",
+    "jobId": "JOB-269095d8-09b2-4ef5-ad58-58c8a21459a9",
+    "status": "PENDING"
+  },
+  {
+    "part": 10,
+    "fileName": "anti_fraud_historical_1500_part_10.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250902-0451",
+    "lastCaseId": "FRD-TXT-20260127-0500",
+    "jobId": "JOB-de8dc19e-aec4-4b23-a1e0-135cff52958c",
+    "status": "PENDING"
+  },
+  {
+    "part": 11,
+    "fileName": "anti_fraud_historical_1500_part_11.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260130-0501",
+    "lastCaseId": "FRD-TXT-20260626-0550",
+    "jobId": "JOB-ef7d552b-f6e7-47b6-9241-a530b23754e2",
+    "status": "PENDING"
+  },
+  {
+    "part": 12,
+    "fileName": "anti_fraud_historical_1500_part_12.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260629-0551",
+    "lastCaseId": "FRD-TXT-20250502-0600",
+    "jobId": "JOB-71a3d31f-693c-4eb4-a431-086c04b2bc80",
+    "status": "PENDING"
+  },
+  {
+    "part": 13,
+    "fileName": "anti_fraud_historical_1500_part_13.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250505-0601",
+    "lastCaseId": "FRD-TXT-20250929-0650",
+    "jobId": "JOB-22734ad0-c1c9-4eb6-8ab7-8a0a6f6c64dd",
+    "status": "PENDING"
+  },
+  {
+    "part": 14,
+    "fileName": "anti_fraud_historical_1500_part_14.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20251002-0651",
+    "lastCaseId": "FRD-TXT-20260226-0700",
+    "jobId": "JOB-34bbff87-3c0d-47b4-a4aa-1c3cc0214c66",
+    "status": "PENDING"
+  },
+  {
+    "part": 15,
+    "fileName": "anti_fraud_historical_1500_part_15.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260301-0701",
+    "lastCaseId": "FRD-TXT-20260726-0750",
+    "jobId": "JOB-2dd3a1b1-aab1-4fae-96a8-3349c7e5db02",
+    "status": "PENDING"
+  },
+  {
+    "part": 16,
+    "fileName": "anti_fraud_historical_1500_part_16.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260729-0751",
+    "lastCaseId": "FRD-TXT-20250601-0800",
+    "jobId": "JOB-b304b5c2-26d2-49cf-be78-2e94104719ec",
+    "status": "PENDING"
+  },
+  {
+    "part": 17,
+    "fileName": "anti_fraud_historical_1500_part_17.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250604-0801",
+    "lastCaseId": "FRD-TXT-20251029-0850",
+    "jobId": "JOB-34dad890-5ac5-47d5-9a16-b846037aa109",
+    "status": "PENDING"
+  },
+  {
+    "part": 18,
+    "fileName": "anti_fraud_historical_1500_part_18.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20251101-0851",
+    "lastCaseId": "FRD-TXT-20260328-0900",
+    "jobId": "JOB-6f40f793-c8d8-4aa4-85cb-e630299f1878",
+    "status": "PENDING"
+  },
+  {
+    "part": 19,
+    "fileName": "anti_fraud_historical_1500_part_19.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260331-0901",
+    "lastCaseId": "FRD-TXT-20250201-0950",
+    "jobId": "JOB-cfc7bff2-3284-41ec-bfbb-a733bf231fd7",
+    "status": "PENDING"
+  },
+  {
+    "part": 20,
+    "fileName": "anti_fraud_historical_1500_part_20.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250204-0951",
+    "lastCaseId": "FRD-TXT-20250701-1000",
+    "jobId": "JOB-0417d914-490e-476d-9945-c8ea88bc6fbc",
+    "status": "PENDING"
+  },
+  {
+    "part": 21,
+    "fileName": "anti_fraud_historical_1500_part_21.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250704-1001",
+    "lastCaseId": "FRD-TXT-20251128-1050",
+    "jobId": "JOB-0756925d-16ec-42c2-953f-1b22b89c681e",
+    "status": "PENDING"
+  },
+  {
+    "part": 22,
+    "fileName": "anti_fraud_historical_1500_part_22.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20251201-1051",
+    "lastCaseId": "FRD-TXT-20260427-1100",
+    "jobId": "JOB-f2998c7c-206b-4c95-8fa2-eff68fa8be92",
+    "status": "PENDING"
+  },
+  {
+    "part": 23,
+    "fileName": "anti_fraud_historical_1500_part_23.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260430-1101",
+    "lastCaseId": "FRD-TXT-20250303-1150",
+    "jobId": "JOB-5009284c-964a-4f10-8ca6-1ae5f0560a79",
+    "status": "PENDING"
+  },
+  {
+    "part": 24,
+    "fileName": "anti_fraud_historical_1500_part_24.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250306-1151",
+    "lastCaseId": "FRD-TXT-20250731-1200",
+    "jobId": "JOB-0085c948-af69-43c3-bf47-8b37ff93704e",
+    "status": "PENDING"
+  },
+  {
+    "part": 25,
+    "fileName": "anti_fraud_historical_1500_part_25.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250803-1201",
+    "lastCaseId": "FRD-TXT-20251228-1250",
+    "jobId": "JOB-26e34c4a-7ba5-4c03-b157-98d6fd07287d",
+    "status": "PENDING"
+  },
+  {
+    "part": 26,
+    "fileName": "anti_fraud_historical_1500_part_26.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20251231-1251",
+    "lastCaseId": "FRD-TXT-20260527-1300",
+    "jobId": "JOB-62e9b893-d803-4e58-b916-f896b6e8545a",
+    "status": "PENDING"
+  },
+  {
+    "part": 27,
+    "fileName": "anti_fraud_historical_1500_part_27.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260530-1301",
+    "lastCaseId": "FRD-TXT-20250402-1350",
+    "jobId": "JOB-16a5f540-9f29-4702-940a-4d0e38e6c219",
+    "status": "PENDING"
+  },
+  {
+    "part": 28,
+    "fileName": "anti_fraud_historical_1500_part_28.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250405-1351",
+    "lastCaseId": "FRD-TXT-20250830-1400",
+    "jobId": "JOB-33e91dc5-4308-438e-bafd-2b1208055060",
+    "status": "PENDING"
+  },
+  {
+    "part": 29,
+    "fileName": "anti_fraud_historical_1500_part_29.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20250902-1401",
+    "lastCaseId": "FRD-TXT-20260127-1450",
+    "jobId": "JOB-ee1ef925-97b5-4ec3-a7d0-7f36dc5bd8c5",
+    "status": "PENDING"
+  },
+  {
+    "part": 30,
+    "fileName": "anti_fraud_historical_1500_part_30.csv",
+    "caseCount": 50,
+    "firstCaseId": "FRD-TXT-20260130-1451",
+    "lastCaseId": "FRD-TXT-20260626-1500",
+    "jobId": "JOB-eab25adc-de64-44cf-ae75-188ca3c67092",
+    "status": "PENDING"
+  }
+]

@@ -56,8 +56,12 @@ WORKER_ID = "XI_AN_STRUCTURED_CASE_PIPELINE"
 WORKER_VERSION = "2.8.0-bge-m3-event-rag"
 NEW_BATCH_FIELDS = ("basic_info", "customers", "transaction_features")
 HISTORICAL_BATCH_FIELDS = ("basic_info", "customers", "analysis_texts")
+HISTORICAL_ENRICHED_BATCH_FIELDS = (
+    "basic_info", "customers", "analysis_texts", "accounts", "evidences"
+)
 HISTORICAL_BATCH_FIELD_ALIASES = (
     HISTORICAL_BATCH_FIELDS,
+    HISTORICAL_ENRICHED_BATCH_FIELDS,
     ("basic_info", "customers", "analysis_text"),
 )
 MAX_BATCH_CASES = 500
@@ -190,8 +194,15 @@ def _batch_record(values: dict[str, Any], source: str, recognition_mode: str) ->
     record: dict[str, Any] = {
         "basic_info": basic_info,
         "customers": customers,
-        "accounts": [],
+        "accounts": (
+            _decode_batch_json(values.get("accounts"), "accounts", source, list)
+            if "accounts" in values else []
+        ),
         "other_entities": [],
+        "evidences": (
+            _decode_batch_json(values.get("evidences"), "evidences", source, list)
+            if "evidences" in values else []
+        ),
     }
     if recognition_mode == "HISTORICAL":
         record["analysis_texts"] = _decode_batch_analysis_texts(values, source)

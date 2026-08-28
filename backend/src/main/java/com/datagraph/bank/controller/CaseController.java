@@ -82,14 +82,21 @@ public class CaseController {
             @RequestParam(required = false) String riskLevel,
             @RequestParam(required = false) String recognitionMode,
             @RequestParam(required = false) String bankCode,
-            @RequestParam(required = false) String jobId) {
+            @RequestParam(required = false) String jobId,
+            @RequestParam(required = false) String scenarioCode) {
         int safePage = Math.max(pageNum, 1);
         int safeSize = Math.min(Math.max(pageSize, 1), 200);
         Page<CfRiskCase> page = new Page<>(safePage, safeSize);
         LambdaQueryWrapper<CfRiskCase> wrapper = new LambdaQueryWrapper<CfRiskCase>()
                 .eq(CfRiskCase::getDeleted, false)
                 .orderByDesc(CfRiskCase::getCreatedAt);
-        if (currentUser.isBankAdmin()) wrapper.eq(CfRiskCase::getBankCode, currentUser.requiredBankCode());
+        if (currentUser.isBankAdmin()) {
+            wrapper.eq(CfRiskCase::getBankCode, currentUser.requiredBankCode());
+        } else if (bankCode != null && !bankCode.isBlank()) {
+            // A platform administrator may inspect every bank. Only apply a
+            // predicate when the caller explicitly selected a bank.
+            wrapper.eq(CfRiskCase::getBankCode, bankCode.trim());
+        }
 
         if (caseId != null && !caseId.isBlank()) {
             String normalizedCaseId = caseId.trim();
@@ -110,6 +117,13 @@ public class CaseController {
         if (riskLevel != null && !riskLevel.isBlank()) {
             wrapper.eq(CfRiskCase::getRiskLevel, riskLevel);
         }
+        if (scenarioCode != null && !scenarioCode.isBlank()) {
+            String scenario = scenarioCode.trim().toUpperCase();
+            if (!Set.of("AML", "ANTI_FRAUD").contains(scenario)) {
+                return CommonResult.error(400, "案例场景必须为反洗钱或反欺诈");
+            }
+            wrapper.eq(CfRiskCase::getScenarioCode, scenario);
+        }
         if (recognitionMode != null && !recognitionMode.isBlank()) {
             String mode = recognitionMode.trim().toUpperCase();
             if (!Set.of("NEW", "HISTORICAL").contains(mode)) return CommonResult.error(400, "案例来源必须为历史案例或新增案例");
@@ -125,11 +139,6 @@ public class CaseController {
             wrapper.inSql(CfRiskCase::getCaseId,
                     "SELECT case_id FROM case_analysis_job_rel WHERE job_id='" + safeJobId + "'");
         }
-        String scopedBankCode = currentUser.scopedBankCode(bankCode);
-        if (scopedBankCode != null && !currentUser.isBankAdmin()) {
-            wrapper.eq(CfRiskCase::getBankCode, scopedBankCode);
-        }
-
         caseMapper.selectPage(page, wrapper);
         enrichCases(page.getRecords());
         return CommonResult.success(PageResult.of(page.getRecords(), page.getTotal(), safePage, safeSize));
@@ -280,9 +289,6 @@ public class CaseController {
     public CommonResult<Void> deleteCase(@PathVariable String caseId) {
         CfRiskCase riskCase = findCase(caseId);
         if (riskCase == null) return CommonResult.error(404, "案例不存在");
-        if (!Set.of("DRAFT", "REJECTED").contains(riskCase.getCaseStatus())) {
-            return CommonResult.error(409, "仅草稿或已驳回案例可以删除");
-        }
         int affected = jdbcTemplate.update("""
                 UPDATE cf_risk_case
                    SET deleted=true,updated_at=CURRENT_TIMESTAMP

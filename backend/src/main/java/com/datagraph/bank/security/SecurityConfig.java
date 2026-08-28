@@ -3,6 +3,7 @@ package com.datagraph.bank.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -37,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/clues/**", "/api/v1/research-analytics/**").hasAnyRole("sadmin", "badmin")
                         .requestMatchers("/api/v1/cases", "/api/v1/cases/**").hasAnyRole("sadmin", "badmin")
                         .requestMatchers("/api/v1/graph/**").hasAnyRole("sadmin", "badmin")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/system/event-metadata").hasAnyRole("sadmin", "badmin")
                         .requestMatchers("/api/v1/system/**").hasRole("sadmin")
                         .anyRequest().authenticated()
                 )

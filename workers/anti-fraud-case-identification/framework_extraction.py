@@ -53,9 +53,36 @@ from similarity_matching import match_similar_cases  # noqa: E402
 
 
 WORKER_ID = "ANTI_FRAUD_CASE_PIPELINE"
-WORKER_VERSION = "1.0.0"
+WORKER_VERSION = "1.1.0"
 WORKFLOW_ID = "ANTI_FRAUD_CASE_PIPELINE"
 RULE_PATH = WORKER_ROOT / "data" / "kb" / "fraud_rules.json"
+RISK_KB_PATH = WORKER_ROOT / "data" / "kb" / "fraud_risk_event_knowledge_base.json"
+RISK_KB_COLLECTION = os.environ.get(
+    "ANTI_FRAUD_QDRANT_COLLECTION", "fraud_risk_event_knowledge_base"
+)
+
+RELATIONSHIP_TYPE_CONTRACT = {
+    "structural": ("涉及关系", "包含关系", "来源关系"),
+    "entity_entity": ("持有关系", "社会关系"),
+    "entity_event": ("参与关系", "涉及关系"),
+    "event_event": ("顺承关系", "上下位关系", "应对关系"),
+}
+RELATIONSHIP_LAYER_ORDER = (
+    "structural", "entity_entity", "entity_event", "event_event"
+)
+
+
+def _risk_kb_summary() -> dict[str, Any]:
+    value = json.loads(RISK_KB_PATH.read_text(encoding="utf-8-sig"))
+    metadata = value.get("metadata") if isinstance(value.get("metadata"), dict) else {}
+    event_types = value.get("event_types") if isinstance(value.get("event_types"), list) else []
+    return {
+        "name": str(metadata.get("name") or ""),
+        "version": str(metadata.get("version") or ""),
+        "event_count": len(event_types),
+        "path": str(RISK_KB_PATH),
+        "qdrant_collection": RISK_KB_COLLECTION,
+    }
 
 
 def _read_json(path: Path, expected: type, required: bool = True) -> Any:
@@ -275,8 +302,25 @@ def _workflow_input(record: dict[str, Any], analysis: dict[str, Any]) -> dict[st
     }
 
 
+def _read_extraction_audit(output_dir: Path) -> dict[str, Any]:
+    audit: dict[str, Any] = {}
+    for file_name, keys in (
+        ("06_event_extraction.json", ("event_extraction_mode", "event_extraction_calls")),
+        ("07_relationship_extraction.json", (
+            "relationship_extraction_order", "relationship_extraction_calls"
+        )),
+    ):
+        path = output_dir / file_name
+        if not path.is_file():
+            continue
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
+        if isinstance(value, dict):
+            audit.update({key: value.get(key) for key in keys})
+    return audit
+
+
 def _restore_direct_mappings(
-    framework: dict[str, Any], record: dict[str, Any]
+    framework: dict[str, Any], record: dict[str, Any], audit: dict[str, Any]
 ) -> dict[str, Any]:
     framework["basic_info"] = record["basic_info"]
     framework["customers"] = record["customers"]
@@ -291,6 +335,32 @@ def _restore_direct_mappings(
         "devices",
     ]
     metadata["llm_extracted_fields"] = ["events", "relationships"]
+    metadata["risk_event_knowledge_base_audit"] = _risk_kb_summary()
+    metadata["relationship_type_contract"] = {
+        stage: list(types) for stage, types in RELATIONSHIP_TYPE_CONTRACT.items()
+    }
+    metadata["relationship_layer_order"] = list(RELATIONSHIP_LAYER_ORDER)
+    metadata.update({key: value for key, value in audit.items() if value is not None})
+
+    actual_order = [
+        str(item.get("stage") or "")
+        for item in metadata.get("relationship_extraction_order") or []
+        if isinstance(item, dict)
+    ]
+    if actual_order and actual_order != list(RELATIONSHIP_LAYER_ORDER):
+        raise ValueError(f"关系分层抽取顺序不符合契约: {actual_order}")
+    allowed_types = {
+        relation_type
+        for values in RELATIONSHIP_TYPE_CONTRACT.values()
+        for relation_type in values
+    }
+    unexpected = sorted({
+        str(item.get("relationship_type") or "")
+        for item in framework.get("relationships") or []
+        if isinstance(item, dict) and str(item.get("relationship_type") or "") not in allowed_types
+    })
+    if unexpected:
+        raise ValueError("反欺诈关系类型不符合共享关系契约: " + ", ".join(unexpected))
     return framework
 
 
@@ -365,12 +435,15 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
         records = load_batch_case_file(source, recognition_mode)
         source_sha = _source_sha256(source)
         if request.get("validateOnly"):
+            kb_summary = _risk_kb_summary()
             return {
                 "status": "SUCCEEDED", "workflow": WORKFLOW_ID,
                 "processingMode": mode, "recognitionMode": recognition_mode,
                 "caseCount": len(records),
                 "caseIds": [str(record["basic_info"]["case_id"]) for record in records],
                 "sourceSha256": source_sha,
+                "riskKnowledgeBaseVersion": kb_summary["version"],
+                "riskKnowledgeBaseEventCount": kb_summary["event_count"],
             }
         batch_results: list[dict[str, Any]] = []
         temp_parent = WORKER_ROOT / "runs"
@@ -420,6 +493,7 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
     )
     record["risk_event_chain"] = risk_chain
     if request.get("validateOnly"):
+        kb_summary = _risk_kb_summary()
         return {
             "status": "SUCCEEDED",
             "workflow": WORKFLOW_ID,
@@ -431,6 +505,8 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
             "allowedChannels": list(CHANNELS),
             "riskEventCount": len(risk_chain),
             "ruleLibraryVersion": rule_engine.version,
+            "riskKnowledgeBaseVersion": kb_summary["version"],
+            "riskKnowledgeBaseEventCount": kb_summary["event_count"],
             "sourceSha256": _source_sha256(source),
         }
 
@@ -480,7 +556,8 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
 
     settings = request.get("frameworkSettings") if isinstance(request.get("frameworkSettings"), dict) else {}
     workflow = BankCaseWorkflow(
-        kb_path=RULE_PATH,
+        kb_path=RISK_KB_PATH,
+        kb_collection=RISK_KB_COLLECTION,
         output_root=run_root / "extraction",
         llm_enabled=bool(settings.get("llmEnabled", True)),
         corenlp_enabled=bool(settings.get("corenlpEnabled", True)),
@@ -496,7 +573,11 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
             _workflow_input(record, analysis),
             run_dir=run_root / "extraction" / _safe_name(record["basic_info"]["case_id"]),
         )
-        framework = _restore_direct_mappings(final_case.model_dump(mode="json"), record)
+        framework = _restore_direct_mappings(
+            final_case.model_dump(mode="json"),
+            record,
+            _read_extraction_audit(output_dir),
+        )
         final_path = output_dir / "final_case.json"
         final_path.write_text(json.dumps(framework, ensure_ascii=False, indent=2), encoding="utf-8")
         extraction_seconds = perf_counter() - extraction_started
@@ -525,6 +606,7 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
         "channel": record["basic_info"]["渠道"],
         "riskEventChain": risk_chain,
         "ruleLibraryVersion": rule_engine.version,
+        "riskKnowledgeBase": _risk_kb_summary(),
         "suspiciousReport": {**analysis, "caseId": case_id},
         "analysisReport": {**analysis, "caseId": case_id},
         "extractionResult": {
