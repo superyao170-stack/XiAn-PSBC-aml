@@ -1,0 +1,9 @@
+生成报告段落SUMMARY“风险点总结”。
+
+综合CRIME_CHAIN、ACCOUNT_PROFILE、TRANSACTION和MOBILE四段，概括发现来源、主体账户、最重要的风险事件组合、客户画像偏离边界和当前处置。不得新增上游未出现的事实，不得把公安涉案账户下发或规则命中直接写成账户持有人已经实施诈骗。避免逐句重复后文。
+
+严格输出：
+{"paragraphs":[{"paragraph_id":"SUMMARY","text":"...","fact_refs":[],"risk_event_refs":["R001"],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

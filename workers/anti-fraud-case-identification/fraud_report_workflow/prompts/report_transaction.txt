@@ -1,0 +1,9 @@
+生成报告段落TRANSACTION“三、交易流水可疑特征”。
+
+只使用交易类risk_events以及与客户、账户相关的facts。分析可核验的多头转入、集中或快速转出、试探交易、拆分交易、交易附言、金额承接和转出比例。不得从风险规则候选补充阈值，不得把输入没有提供的长期基线、余额、地域或受害人身份写入正文。区分已完成与未执行交易，并说明合理经营、还款、清算等解释是否因缺乏资料而仍待核实。
+
+严格输出：
+{"paragraphs":[{"paragraph_id":"TRANSACTION","text":"...","fact_refs":[],"risk_event_refs":["R001"],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

@@ -9,6 +9,7 @@ node alignment, and the final ranking uses only normalized approximate GED.
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import math
@@ -41,7 +42,7 @@ MIN_SHARED_EVENT_TYPES = 1
 MIN_EVENT_OVERLAP = 0.10
 MIN_EVENT_COUNT_RATIO = 0.20
 TOP_RESULT_COUNT = 5
-SIMILARITY_FINGERPRINT_VERSION = "case-similarity-v7-recall-ged"
+SIMILARITY_FINGERPRINT_VERSION = "case-similarity-v8-visible-event-anchors"
 
 EVENT_RELATIONS = {"顺承关系", "上下位关系", "应对关系"}
 ENTITY_EVENT_RELATIONS = {"参与关系", "涉及关系"}
@@ -356,9 +357,18 @@ def text_similarity(left: str, right: str) -> float:
     if not left or not right:
         return 0.0
     if _semantic_engine is None:
-        # Direct unit-test/library calls without configured model use exact
-        # equality only; production CLI runs always configure the model.
-        return 1.0 if left == right else 0.0
+        # A timed-out/unavailable embedding model must not erase all event
+        # explanations. Use a deterministic lexical score so same-type event
+        # anchors remain reviewable in the degraded GED path.
+        compact_left = re.sub(r"[\W_]+", "", left, flags=re.UNICODE)
+        compact_right = re.sub(r"[\W_]+", "", right, flags=re.UNICODE)
+        if compact_left == compact_right:
+            return 1.0
+        left_grams = {compact_left[i:i + 2] for i in range(max(1, len(compact_left) - 1))}
+        right_grams = {compact_right[i:i + 2] for i in range(max(1, len(compact_right) - 1))}
+        dice = (2 * len(left_grams & right_grams) / (len(left_grams) + len(right_grams))) \
+            if left_grams and right_grams else 0.0
+        return max(dice, difflib.SequenceMatcher(None, compact_left, compact_right).ratio())
     return _semantic_engine.cosine_similarity(left, right)
 
 
@@ -1040,7 +1050,8 @@ def greedy_event_mapping(left: CaseGraph, right: CaseGraph) -> Tuple[Dict[str, s
                 right.nodes[right_id].description,
             )
             same_type = left.nodes[left_id].subtype == right.nodes[right_id].subtype
-            if same_type and description_score >= ANCHOR_THRESHOLD:
+            effective_threshold = ANCHOR_THRESHOLD if _semantic_engine is not None else 0.20
+            if same_type and description_score >= effective_threshold:
                 candidates.append((cost, -description_score, left_id, right_id, description_score))
 
     mapping: Dict[str, str] = {}

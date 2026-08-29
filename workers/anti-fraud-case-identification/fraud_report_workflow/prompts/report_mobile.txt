@@ -1,0 +1,9 @@
+生成报告段落MOBILE“四、手机银行操作日志情况分析”。
+
+只使用设备、APP、限额和账户控制类risk_events及devices facts。按时间说明新设备、IP、屏幕共享、夜间操作、收款人维护、通知设置、限额查询/调整、认证失败等可核验事实。不同设备或IP不自动证明由他人控制；除非输入存在直接证据，只能表述为非常用环境或账户控制风险。
+
+严格输出：
+{"paragraphs":[{"paragraph_id":"MOBILE","text":"...","fact_refs":[],"risk_event_refs":["R001"],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

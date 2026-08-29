@@ -1,0 +1,9 @@
+生成报告段落ACCOUNT_PROFILE“二、账户基础画像”。
+
+只整理basic_info、customers和accounts中的事实，说明主体账户对应客户、该客户名下其他账户、开户时间、账户类型、职业行业、地区、机构及客户风险等级。可以说明交易对手账户和客户已被纳入关联核查，但不得凭账户列表推断其人员角色或违法关系。事件链未提供长期收入、历史交易规模或账户用途基线时，不得自行补充。
+
+严格输出：
+{"paragraphs":[{"paragraph_id":"ACCOUNT_PROFILE","text":"...","fact_refs":[],"risk_event_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

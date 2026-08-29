@@ -1,0 +1,20 @@
+将完整raw_events聚合为精简风险事件链。
+
+要求：
+- 必须逐条检查全部原始事件，不能先按risk_rule_candidates过滤。
+- risk_rule_candidates只提供辅助方向；规则未覆盖的组合风险可使用“其他风险”。
+- 同一风险机制下时间连续、相互支撑的原始事件应聚合为一个风险事件，不按单条事件机械复制。
+- 一条普通事件只有在支持“变化前基线、试探行为、时序关联或处置结果”时才并入风险事件。
+- 每条风险事件必须引用至少一个source_event_index；start_time与end_time必须分别等于引用事件中的最早和最晚时间。
+- risk_event_id按start_time升序，从R001开始连续编号。
+- risk_type只能来自allowed_risk_types。
+- content只描述引用事件能够支持的事实组合、风险含义和必要的不确定性，不显示规则ID。
+- 主体必须与原始事件完全一致。交易叙述必须明写“主体账户向交易对手转出”或“主体账户收到交易对手转入”，不得用“转入方/转出方”等可能把交易对手写成行为主体的省略表达。
+- 如果payload包含previous_risk_events和review_issues_to_fix，这是审查驳回后的修订任务：必须逐条修正所有error，保留其他已有事实，不得重复输出审查已指出的错误表述。
+- 不得因为规则库没有匹配项而遗漏原始事件中明显、可核验的风险组合。
+
+严格输出：
+{"risk_events":[{"risk_event_id":"R001","start_time":"yyyy-MM-dd HH:mm:ss","end_time":"yyyy-MM-dd HH:mm:ss","risk_type":"allowed_risk_types之一","content":"...","source_event_indexes":[1,2]}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

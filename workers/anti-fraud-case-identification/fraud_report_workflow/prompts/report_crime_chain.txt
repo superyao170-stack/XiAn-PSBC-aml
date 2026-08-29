@@ -1,0 +1,9 @@
+生成报告段落CRIME_CHAIN“一、犯罪链路分析”。
+
+依据已验证的risk_events，按时间顺序说明设备/APP准备、收款人维护、资金进入、资金转移、限额变化、失败尝试和风险处置之间的关系。只描述主体账户的行为；其他账户只能作为交易对手或本人其他账户。不得超出风险事件链推断团伙分工、受害人身份、最终资金去向或犯罪既遂。事实不足时明确需要核实。
+
+严格输出：
+{"paragraphs":[{"paragraph_id":"CRIME_CHAIN","text":"...","fact_refs":[],"risk_event_refs":["R001"],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+任务输入：
+{{PAYLOAD_JSON}}

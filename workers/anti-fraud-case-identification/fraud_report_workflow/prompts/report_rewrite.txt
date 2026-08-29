@@ -1,0 +1,7 @@
+只重写target_paragraph_id指定的一个报告段落，解决review_issues，不修改其他段落。继续遵守事实引用、风险事件引用、单一主体账户、交易状态和审慎表述规则；不得通过删除关键事实掩盖问题，也不得从规则库或常识新增事实。
+
+严格输出：
+{"paragraphs":[{"paragraph_id":"与target_paragraph_id一致","text":"...","fact_refs":[],"risk_event_refs":[],"missing_inputs":[],"status":"complete|partial|not_assessable"}]}
+
+重写输入：
+{{PAYLOAD_JSON}}

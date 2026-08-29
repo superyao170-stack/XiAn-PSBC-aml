@@ -1,0 +1,27 @@
+{
+  "rule_top_k": 6,
+  "node_workers": 4,
+  "model_attempts": 2,
+  "max_risk_revision_rounds": 5,
+  "max_rewrite_rounds": 2,
+  "allowed_risk_types": [
+    "异常设备登录",
+    "异常APP操作",
+    "异常限额操作",
+    "异常资金流入",
+    "资金快进快出",
+    "异常交易对手",
+    "试探或拆分交易",
+    "账户控制异常",
+    "规则或涉案信息命中",
+    "风险处置",
+    "其他风险"
+  ],
+  "paragraph_lengths": {
+    "SUMMARY": {"target_chars": 260, "soft_min_chars": 140, "soft_max_chars": 520},
+    "CRIME_CHAIN": {"target_chars": 420, "soft_min_chars": 220, "soft_max_chars": 800},
+    "ACCOUNT_PROFILE": {"target_chars": 320, "soft_min_chars": 160, "soft_max_chars": 620},
+    "TRANSACTION": {"target_chars": 420, "soft_min_chars": 220, "soft_max_chars": 800},
+    "MOBILE": {"target_chars": 380, "soft_min_chars": 180, "soft_max_chars": 720}
+  }
+}

@@ -1,0 +1,22 @@
+审查五个报告段落是否可以按固定模板正式拼接。
+
+重点检查：
+- 五段齐全、职责正确，风险点总结不新增事实；
+- 每个客户、账户、金额、日期、设备、IP、交易状态和处置都有有效fact_ref或risk_event_ref；
+- 报告只使用已验证风险事件链，不从原始事件或规则候选绕过风险事件阶段增加风险事实；
+- 账户基础画像没有用静态账户列表推断违法角色；
+- 犯罪链路分析没有虚构团伙分工、受害人身份、资金最终去向或犯罪结论；
+- 交易分析区分已执行、未执行和被拒绝交易，金额与比例不矛盾；
+- 手机银行分析没有把新设备或IP直接等同于他人控制；
+- 公安下发、规则命中与银行处置没有被写成犯罪认定；
+- 各段落没有相互矛盾或无意义重复，缺失资料采用partial/not_assessable处理。
+
+长度范围是软性提示，不能仅因长度判定error。需要修改时只列出目标段落。
+
+严格输出：
+{"pass":true,"issues":[],"rewrite_targets":[]}
+或
+{"pass":false,"issues":[{"paragraph_id":"TRANSACTION","code":"UNSUPPORTED|REFERENCE_ERROR|STATE_ERROR|ROLE_ERROR|CONTRADICTION|OTHER","message":"...","severity":"error|warning"}],"rewrite_targets":["TRANSACTION"]}
+
+审查输入：
+{{PAYLOAD_JSON}}

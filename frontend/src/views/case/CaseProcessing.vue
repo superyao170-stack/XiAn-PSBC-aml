@@ -26,22 +26,49 @@
       <el-pagination v-model:current-page="pageNum" v-model:page-size="pageSize" :total="total" :page-sizes="[10,20,50]" layout="total, sizes, prev, pager, next" />
     </el-card>
 
-    <el-dialog v-model="detailVisible" :title="`${detail.caseName||''} · ${page.title}`" width="1100px" top="4vh" destroy-on-close>
+    <el-dialog v-model="detailVisible" :title="`${detail.caseName||''} · ${page.title}`" width="94vw" top="4vh" destroy-on-close>
       <div v-loading="detailLoading" class="detail-body">
         <div class="detail-toolbar">
           <el-tag>{{ detail.caseId }}</el-tag><el-tag type="success">{{ sceneText(detail.scenarioCode) }}</el-tag>
           <template v-if="page.key==='approval'">
-            <span class="risk-label">基本信息风险等级</span><el-tag :type="riskType(detail.recommendedRiskLevel)">{{ riskText(detail.recommendedRiskLevel) }}</el-tag>
+            <span class="risk-label">系统建议风险等级</span><el-tag :type="riskType(detail.recommendedRiskLevel)">{{ riskText(detail.recommendedRiskLevel) }}<template v-if="detail.recommendedRiskScore!=null"> · {{ detail.recommendedRiskScore }}分</template></el-tag>
             <el-select v-model="finalRisk" placeholder="请选择最终风险等级"><el-option label="低风险" value="LOW"/><el-option label="中风险" value="MEDIUM"/><el-option label="高风险" value="HIGH"/></el-select>
             <el-button type="success" :loading="approving" @click="approve">审核通过</el-button>
           </template>
         </div>
+        <el-alert v-if="page.key==='approval'" title="系统依据基础字段、事件、关系和相似案例给出默认等级；复核人员可在右上角二次核定。" type="info" :closable="false" class="rating-hint" />
 
         <el-tabs v-model="activeTab">
           <el-tab-pane v-if="detail.sourcePayload" label="基本信息" name="basic">
             <el-collapse v-model="basicSections">
               <el-collapse-item v-for="item in sourceSections" :key="item.key" :title="`${item.label}（${item.count}）`" :name="item.key"><JsonPanel :value="item.value" /></el-collapse-item>
             </el-collapse>
+          </el-tab-pane>
+          <el-tab-pane v-if="detail.scenarioCode==='ANTI_FRAUD'" label="风险事件链" name="risk-chain">
+            <template v-if="riskEventChain.length">
+              <div class="risk-chain-overview">
+                <div><strong>{{ sourceEvents.length }}</strong><span>原始事件</span></div>
+                <div><strong>{{ riskEventChain.length }}</strong><span>风险事件</span></div>
+                <p>红色节点为经反欺诈工作流审查后保留的风险节点；序号可回溯至原始事件链 JSON。</p>
+              </div>
+              <div class="risk-chain-layout">
+              <div class="source-event-chain">
+                <article v-for="(event,index) in sourceEvents" :key="index" :class="{risk:isRiskSource(index+1)}">
+                  <i>{{ index+1 }}</i>
+                  <div><header><b>{{ event['类型'] || event.type || '事件' }}</b><time>{{ event['发生时间'] || event.occurred_at }}</time><el-tag v-if="isRiskSource(index+1)" size="small" type="danger">风险节点</el-tag></header><p>{{ event['具体内容'] || event.content }}</p></div>
+                </article>
+              </div>
+              <aside class="risk-event-list">
+                <article v-for="risk in riskEventChain" :key="risk.risk_event_id">
+                  <header><b>{{ risk.risk_event_id }}</b><el-tag type="danger" size="small">{{ risk.risk_type || risk.category }}</el-tag></header>
+                  <p>{{ risk.content || risk.reason }}</p>
+                  <small>{{ risk.start_time || risk.event_start }} 至 {{ risk.end_time || risk.event_end }}</small>
+                  <footer>来源节点：{{ riskSourceLabels(risk) }}</footer>
+                </article>
+              </aside>
+              </div>
+            </template>
+            <el-empty v-else description="尚未生成风险事件链，请先执行反欺诈可疑报告生成" :image-size="72" />
           </el-tab-pane>
           <el-tab-pane v-if="detail.suspiciousReport" label="可疑报告" name="report">
             <el-input v-model="reportText" type="textarea" :rows="18" />
@@ -82,6 +109,8 @@
                   <span>命中关系 <strong>{{ matchedValue(item,'matchedEdgeCount','matched_edge_count') }}</strong></span>
                   <span>原始 GED <strong>{{ decimalText(item.ged) }}</strong></span>
                 </div>
+
+                <MatchedGraphComparison :match="item" :query-title="detail.caseName||detail.caseId" />
 
                 <section class="event-similarity-panel">
                   <div class="event-similarity-head">
@@ -135,6 +164,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { approveProcessingCaseApi, getCaseProcessingApi, getCaseProcessingDetailApi, processCasesApi, updateProcessingReportApi } from '@/api/caseProcessing'
 import { formatDateTime } from '@/utils/datetime'
+import MatchedGraphComparison from '@/components/case/MatchedGraphComparison.vue'
 
 const JsonPanel=defineComponent({props:{value:{type:[Object,Array,String,Number,Boolean],default:null}},setup(props){return()=>h('pre',{class:'json-panel'},JSON.stringify(props.value,null,2))}})
 const route=useRoute()
@@ -154,6 +184,11 @@ const sourceLabels:any={basic_info:'基本信息',customers:'客户',transaction
 const extractionLabels:any={basic_info:'案例基本信息',customers:'客户',accounts:'账户',other_entities:'其他实体',events:'事件',relationships:'关系',evidences:'证据'}
 const sections=(value:any,labels:any)=>Object.entries(value||{}).filter(([key])=>labels[key]).map(([key,item]:any)=>({key,label:labels[key],value:item,count:Array.isArray(item)?item.length:(item&&typeof item==='object'?Object.keys(item).length:1)}))
 const sourceSections=computed(()=>sections(detail.value.sourcePayload,sourceLabels)),extractionSections=computed(()=>sections(detail.value.frameworkResult,extractionLabels))
+const sourceEvents=computed<any[]>(()=>detail.value.sourcePayload?.event_chain||[])
+const riskEventChain=computed<any[]>(()=>detail.value.suspiciousReport?.riskEventChain||[])
+const riskSourceIndexes=computed(()=>new Set(riskEventChain.value.flatMap((item:any)=>item.source_event_indexes||item.evidence?.map((source:any)=>Number(source.source_index)+1)||[]).map(Number)))
+const isRiskSource=(index:number)=>riskSourceIndexes.value.has(index)
+const riskSourceLabels=(risk:any)=>(risk.source_event_indexes||risk.evidence?.map((item:any)=>Number(item.source_index)+1)||[]).join('、')||'—'
 const sceneText=(value:string)=>({AML:'反洗钱',ANTI_FRAUD:'反欺诈'} as any)[value]||value
 const statusText=(value:string)=>({PENDING_REPORT:'待生成报告',PENDING_EXTRACTION:'待框架抽取',PENDING_SIMILARITY:'待相似匹配',PENDING_APPROVAL:'待复核审批',APPROVED:'已审核通过'} as any)[value]||value
 const statusType=(value:string)=>({PENDING_REPORT:'info',PENDING_EXTRACTION:'warning',PENDING_SIMILARITY:'primary',PENDING_APPROVAL:'danger',APPROVED:'success'} as any)[value]||'info'
@@ -185,5 +220,6 @@ watch([pageNum,pageSize],load);watch(()=>route.meta.processingPage,()=>{pageNum.
 .match-card{margin-top:10px;border:1px solid #dbe3ef;border-radius:10px;overflow:hidden;transition:border-color .2s,box-shadow .2s}.match-card.expanded{border-color:#a9c9f7;box-shadow:0 8px 24px rgba(37,99,235,.08)}.match-row{display:flex;align-items:center;gap:14px;padding:13px 15px;cursor:pointer;outline:none}.match-row:focus-visible{box-shadow:inset 0 0 0 2px #409eff}.match-row b{color:#2563eb}.match-row>span:first-of-type{flex:1}.match-row em{color:#64748b;font-style:normal;white-space:nowrap}.match-actions{display:flex;gap:6px}.match-toggle{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;min-width:78px;color:#2563eb;font-size:13px;white-space:nowrap}.match-toggle i{font-style:normal;transition:transform .2s}.expanded .match-toggle i{transform:rotate(180deg)}
 .match-detail{padding:18px;border-top:1px solid #e5edf7;background:linear-gradient(135deg,#f7faff,#fffaf3)}.match-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.match-metrics>div{display:flex;flex-direction:column;gap:5px;padding:13px;border:1px solid #e0e8f2;border-radius:10px;background:#fff}.match-metrics small{color:#64748b}.match-metrics strong{color:#174b82;font-size:20px}.match-metrics span{color:#94a3b8;font-size:11px;line-height:1.4}.match-counts{display:flex;gap:22px;padding:13px 2px 4px;color:#64748b;font-size:13px}.match-counts strong{color:#334155}
 .event-similarity-panel{margin-top:12px;padding:17px;border:1px solid #d9e3f0;border-radius:13px;background:rgba(255,255,255,.72)}.event-similarity-head{display:flex;align-items:center;justify-content:space-between}.event-similarity-head small{color:#8090a3;font-size:10px;letter-spacing:.14em}.event-similarity-head h4{margin:4px 0 0;color:#173f69;font-size:17px}.event-summary{margin:10px 0 0;color:#64748b;font-size:13px}.event-anchor-list{display:grid;gap:12px;margin-top:14px}.event-anchor-card{overflow:hidden;border:1px solid #dde5ee;border-left:4px solid #d99a2b;border-radius:11px;background:#fff}.event-anchor-card>header{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid #edf1f5;background:#fbfcfe}.event-anchor-card>header>span{margin-left:auto;color:#64748b;font-size:12px}.event-compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:13px}.event-side{min-width:0;padding:12px;border:1px solid #dce5ef;border-radius:10px}.query-side{border-top:3px solid #2563eb}.candidate-side{border-top:3px solid #7c3aed}.event-side small{color:#64748b;font-weight:700}.event-side h5{margin:7px 0;font-size:14px;line-height:1.45}.event-side p{margin:9px 0 0;color:#475569;font-size:12px;line-height:1.7;word-break:break-word}.common-points{margin:0 13px 13px;padding:12px;border-radius:9px;background:#f8fafc;color:#475569;font-size:12px}.common-points>b{display:block;margin-bottom:8px;color:#334155}.common-points>div{margin-top:8px;padding-left:10px;border-left:3px solid #f2c94c}.common-points span{font-weight:600;color:#8a6200}.common-points p{margin:4px 0;line-height:1.55}
-@media(max-width:900px){.match-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.event-compare-grid{grid-template-columns:1fr}.match-row{flex-wrap:wrap}.match-row>span:first-of-type{min-width:55%}}
+.rating-hint{margin-bottom:10px}.risk-chain-overview{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:14px 16px;border:1px solid #fee2e2;border-radius:12px;background:linear-gradient(135deg,#fff7f7,#fff)}.risk-chain-overview>div{display:flex;min-width:92px;flex-direction:column}.risk-chain-overview strong{color:#b42318;font-size:24px}.risk-chain-overview span{color:#64748b;font-size:12px}.risk-chain-overview p{margin:0 0 0 auto;color:#64748b;font-size:12px}.risk-chain-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.8fr);gap:18px;max-height:560px;overflow:auto}.source-event-chain{padding-left:8px}.source-event-chain article{position:relative;display:flex;gap:12px;padding:0 0 18px 8px}.source-event-chain article:before{position:absolute;top:28px;bottom:0;left:21px;width:2px;background:#dbe4ef;content:''}.source-event-chain article:last-child:before{display:none}.source-event-chain i{z-index:1;display:grid;width:28px;height:28px;flex:none;place-items:center;border:2px solid #93a4b8;border-radius:50%;background:#fff;color:#64748b;font-size:11px;font-style:normal}.source-event-chain article.risk i{border-color:#ef4444;background:#fee2e2;color:#b91c1c;font-weight:700}.source-event-chain article>div{min-width:0;flex:1;padding:11px 13px;border:1px solid #dfe7f0;border-radius:10px;background:#fff}.source-event-chain article.risk>div{border-color:#fca5a5;box-shadow:0 5px 18px rgba(220,38,38,.08)}.source-event-chain header,.risk-event-list header{display:flex;align-items:center;gap:9px}.source-event-chain time{margin-left:auto;color:#64748b;font-size:11px}.source-event-chain p,.risk-event-list p{margin:8px 0 0;color:#475569;font-size:12px;line-height:1.65}.risk-event-list{display:grid;align-content:start;gap:10px}.risk-event-list article{padding:14px;border-left:4px solid #dc2626;border-radius:10px;background:#fff5f5}.risk-event-list small{display:block;margin-top:9px;color:#64748b}.risk-event-list footer{margin-top:9px;color:#b42318;font-size:11px;font-weight:600}
+@media(max-width:900px){.match-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.event-compare-grid,.risk-chain-layout{grid-template-columns:1fr}.match-row{flex-wrap:wrap}.match-row>span:first-of-type{min-width:55%}}
 </style>

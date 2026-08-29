@@ -48,6 +48,7 @@ for module_root in (WORKER_ROOT, SHARED_WORKER, XIAN_MODULE_ROOT):
 from channel import CHANNELS, infer_channel  # noqa: E402
 from datagraph_bank.workflow import BankCaseWorkflow  # noqa: E402
 from report_generation import generate_analysis  # noqa: E402
+from fraud_v2_report import generate_fraud_report  # noqa: E402
 from risk_chain import FraudRuleEngine  # noqa: E402
 from similarity_matching import match_similar_cases  # noqa: E402
 
@@ -143,6 +144,9 @@ def load_case_directory(source: Path, recognition_mode: str) -> dict[str, Any]:
     _normalize_devices(devices)
 
     event_chain = _read_json(source / "event_chain.json", list, required=False)
+    reviewed_risk_chain = _read_json(
+        source / "risk_event_chain.json", list, required=False
+    )
     text_analysis = _read_json(source / "text_analysis.json", dict, required=False)
     if recognition_mode == "HISTORICAL" and text_analysis is None:
         raise ValueError("历史反欺诈案例必须包含 text_analysis.json")
@@ -164,6 +168,7 @@ def load_case_directory(source: Path, recognition_mode: str) -> dict[str, Any]:
         "devices": devices,
         "other_entities": _normalize_devices(devices),
         "event_chain": event_chain or [],
+        "reviewed_risk_event_chain": reviewed_risk_chain or [],
     }
     if text_analysis is not None:
         record["text_analysis"] = text_analysis
@@ -486,7 +491,7 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
         raise ValueError("processingMode 必须是 SINGLE 或 BATCH")
     record = load_case_directory(source, recognition_mode)
     rule_engine = FraudRuleEngine(RULE_PATH)
-    risk_chain = (
+    risk_chain = record.get("reviewed_risk_event_chain") or (
         rule_engine.build(record["basic_info"]["渠道"], record["event_chain"])
         if recognition_mode == "NEW"
         else []
@@ -534,7 +539,11 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
     run_root = WORKER_ROOT / "runs" / _safe_name(job_id)
     run_root.mkdir(parents=True, exist_ok=True)
     analysis_started = perf_counter()
-    analysis = generate_analysis(record)
+    if target_stage == "REPORT" and recognition_mode == "NEW":
+        analysis, risk_chain = generate_fraud_report(source)
+        record["risk_event_chain"] = risk_chain
+    else:
+        analysis = generate_analysis(record)
     analysis_seconds = perf_counter() - analysis_started
     if target_stage == "REPORT":
         result = {

@@ -1,0 +1,23 @@
+审查风险事件链能否作为正式中间输出和报告输入。
+
+逐项检查：
+- 是否完整检查raw_events，而不是只保留risk_rule_candidates能够覆盖的事件；
+- 是否遗漏规则库未覆盖但多条原始事件共同支持的风险；
+- 是否把单笔普通事件、静态属性或纯关键词误写为风险事件；
+- source_event_indexes是否充分、有效，时间范围是否与引用事件一致；
+- 是否重复计算、重复输出或把一个连续风险机制无意义拆分；
+- 是否把交易对手写成行为主体；
+- 是否虚构金额、设备、IP、账号、意图、因果关系或犯罪结论；
+- 是否忠实区分成功、失败、未执行和已实施处置；
+- 风险处置是否被错误描述为可疑行为；
+- 无规则匹配是否被错误解释为无风险。
+
+长度或措辞偏好只能作为warning；事实错误、遗漏重要组合风险、引用错误和犯罪定性为error。
+
+严格输出：
+{"pass":true,"issues":[]}
+或
+{"pass":false,"issues":[{"code":"MISSED_RISK|UNSUPPORTED|BAD_REFERENCE|OVER_SPLIT|SUBJECT_ERROR|STATE_ERROR|OTHER","message":"...","severity":"error|warning","source_event_indexes":[1,2]}]}
+
+审查输入：
+{{PAYLOAD_JSON}}
