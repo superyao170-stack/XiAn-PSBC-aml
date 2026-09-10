@@ -42,12 +42,12 @@
       </div>
       <el-alert v-if="jobIdFilter" title="当前仅显示所选识别任务生成的案例" type="info" show-icon closable @close="clearJobFilter" />
       <el-alert v-if="loadError" :title="loadError" type="error" show-icon :closable="false" class="load-error" />
-      <div class="scope-actions">
+      <div v-if="!readOnly" class="scope-actions">
         <span>已选择 {{ selectedCases.length }} 个案例</span>
         <small v-if="selectedCases.length === 1">跨案分析还需至少选择一个案例</small>
       </div>
       <el-table v-loading="loading" :data="cases" table-layout="fixed" :fit="true" class="case-table" @selection-change="selectedCases = $event">
-        <el-table-column type="selection" width="42" />
+        <el-table-column v-if="!readOnly" type="selection" width="42" />
         <el-table-column prop="id" label="案例ID" min-width="74" show-overflow-tooltip />
         <el-table-column prop="caseName" label="案例名称" min-width="90" show-overflow-tooltip />
         <el-table-column label="案例场景" min-width="100">
@@ -67,7 +67,7 @@
             <div class="two-line" :title="`${getStatusText(row.caseStatus)}\n${formatDateTime(row.createdAt)}`"><el-tag size="small" :type="getStatusTagType(row.caseStatus)">{{ getStatusText(row.caseStatus) }}</el-tag><span class="created-at">{{ formatDateTime(row.createdAt) }}</span></div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" align="right" header-align="right" fixed="right">
+        <el-table-column v-if="!readOnly" label="操作" width="150" align="right" header-align="right" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
             <el-button link size="small" type="primary" @click="openCase(row,'overview')">详情</el-button>
@@ -98,6 +98,7 @@ import { deleteCaseApi, getCasesApi } from '@/api/case'
 import { formatDateTime } from '@/utils/datetime'
 
 const route = useRoute(), router = useRouter()
+const readOnly = localStorage.getItem('roleCode') === 'viewer'
 const jobIdFilter = ref(String(route.query.jobId || ''))
 
 const searchForm = reactive({

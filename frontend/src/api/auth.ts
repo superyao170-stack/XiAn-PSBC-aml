@@ -6,9 +6,18 @@ export interface LoginRequest {
   password: string
 }
 
+export interface RegisterRequest {
+  username: string
+  password: string
+  nickname?: string
+  email?: string
+}
+
 export const loginApi = (data: LoginRequest) => {
   return request.post('/api/v1/auth/login', data)
 }
+
+export const registerApi = (data: RegisterRequest) => request.post('/api/v1/auth/register', data)
 
 export const logoutApi = () => {
   return request.post('/api/v1/auth/logout')

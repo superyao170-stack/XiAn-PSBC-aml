@@ -3,6 +3,7 @@ package com.datagraph.bank.controller;
 import com.datagraph.bank.common.response.CommonResult;
 import com.datagraph.bank.dto.LoginRequest;
 import com.datagraph.bank.dto.LoginResponse;
+import com.datagraph.bank.dto.RegisterRequest;
 import com.datagraph.bank.security.CurrentUser;
 import com.datagraph.bank.security.UserPrincipal;
 import com.datagraph.bank.service.AuditService;
@@ -46,6 +47,13 @@ public class AuthController {
                     servletRequest.getHeader("User-Agent"), false, exception.getMessage());
             throw exception;
         }
+    }
+
+    @PostMapping("/register")
+    @SecurityRequirements
+    public CommonResult<Void> register(@RequestBody RegisterRequest request) {
+        authService.register(request);
+        return CommonResult.success("注册成功，请登录", null);
     }
 
     @PostMapping("/logout")

@@ -87,7 +87,8 @@ const roleText = computed(() => {
   const map: Record<string, string> = {
     sadmin: '超级管理员',
     badmin: '银行管理员',
-    madmin: '监管管理员'
+    madmin: '监管管理员',
+    viewer: '案例访客'
   }
   return map[roleCode.value] || '未知角色'
 })
@@ -169,9 +170,10 @@ const getPathName = (path: string) => {
 }
 
 const filteredMenus = computed(() => {
+  const assignedMenus = userStore.menus.length ? userStore.menus : defaultMenus
   const menus = roleCode.value === 'sadmin'
-    ? defaultMenus
-    : defaultMenus.filter(menu => menu.path !== '/system')
+    ? assignedMenus
+    : assignedMenus.filter(menu => menu.path !== '/system')
   return menus.map(normalizeBusinessMenu).sort(compareMenus)
 })
 

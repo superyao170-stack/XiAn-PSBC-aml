@@ -35,3 +35,5 @@ node tools/graph-viewer/kg-render.mjs <输入.json或目录>
 ```
 
 后端构建会把根目录 `postgresql/` 中的迁移复制进 JAR 的 `db/migration`，源码中不再维护第二份数据库脚本。
+
+公网域名部署、自助注册和只读案例账号的发布说明见 `environment/public/README-公网部署.md`。

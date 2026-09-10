@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <include ignore_missing="yes">/opt/homebrew/etc/fonts/fonts.conf</include>
+  <dir>/Applications/Kimi.app/Contents/Resources/resources/daimon-bundle/app/daimon/dist/src/core/python-runtime/assets/fonts</dir>
+  <cachedir>/tmp/datagraph-tech-doc-45/font-cache</cachedir>
+  <match target="pattern">
+    <test name="family" compare="eq"><string>Songti SC</string></test>
+    <edit name="family" mode="assign"><string>Noto Sans SC</string></edit>
+  </match>
+  <match target="pattern">
+    <test name="family" compare="eq"><string>Heiti SC</string></test>
+    <edit name="family" mode="assign"><string>Noto Sans SC</string></edit>
+  </match>
+  <match target="pattern">
+    <test name="family" compare="eq"><string>STSong</string></test>
+    <edit name="family" mode="assign"><string>Noto Sans SC</string></edit>
+  </match>
+  <match target="pattern">
+    <test name="family" compare="eq"><string>Arial Unicode MS</string></test>
+    <edit name="family" mode="assign"><string>Noto Sans SC</string></edit>
+  </match>
+  <match target="pattern">
+    <test name="family" compare="eq"><string>Hiragino Sans GB</string></test>
+    <edit name="family" mode="assign"><string>Noto Sans SC</string></edit>
+  </match>
+</fontconfig>

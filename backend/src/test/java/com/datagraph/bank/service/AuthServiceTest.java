@@ -3,6 +3,7 @@ package com.datagraph.bank.service;
 import com.datagraph.bank.dto.LoginRequest;
 import com.datagraph.bank.dto.LoginResponse;
 import com.datagraph.bank.dto.MenuDTO;
+import com.datagraph.bank.dto.RegisterRequest;
 import com.datagraph.bank.entity.SysMenu;
 import com.datagraph.bank.entity.SysRole;
 import com.datagraph.bank.entity.SysUser;
@@ -16,11 +17,47 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AuthServiceTest {
+
+    @Test
+    void registerCreatesReadOnlyViewerWithEncodedPassword() {
+        SysUserMapper userMapper = mock(SysUserMapper.class);
+        PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+        when(userMapper.selectCount(any())).thenReturn(0L);
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        AuthService service = new AuthService(userMapper, mock(SysRoleMapper.class),
+                mock(SysMenuMapper.class), passwordEncoder, mock(JwtTokenProvider.class));
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("case_reader");
+        request.setPassword("reader123");
+        request.setNickname("案例读者");
+
+        service.register(request);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(SysUser.class);
+        verify(userMapper).insert(captor.capture());
+        assertEquals("viewer", captor.getValue().getRoleCode());
+        assertEquals("encoded-password", captor.getValue().getPassword());
+        assertTrue(captor.getValue().getStatus());
+    }
+
+    @Test
+    void registerRejectsWeakPassword() {
+        AuthService service = new AuthService(mock(SysUserMapper.class), mock(SysRoleMapper.class),
+                mock(SysMenuMapper.class), mock(PasswordEncoder.class), mock(JwtTokenProvider.class));
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("case_reader");
+        request.setPassword("onlyletters");
+        assertThrows(IllegalArgumentException.class, () -> service.register(request));
+    }
 
     @Test
     void loginReturnsCurrentUploadAndProcessingMenuPaths() {

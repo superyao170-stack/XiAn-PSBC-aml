@@ -12,7 +12,7 @@ const router = createRouter({
     {
       path: '/',
       component: () => import('@/components/layout/AppLayout.vue'),
-      redirect: '/overview',
+      redirect: () => landingPath(),
       children: [
         { path: 'overview', name: 'Overview', component: () => import('@/views/Overview.vue') },
         { path: 'analysis/upload', name: 'CaseUpload', component: () => import('@/views/analysis/PipelineWorkbench.vue') },
@@ -46,7 +46,7 @@ router.beforeEach((to, _from, next) => {
 
   if (to.path === '/login') {
     if (token) {
-      next('/overview')
+      next(landingPath())
     } else {
       next()
     }
@@ -58,18 +58,25 @@ router.beforeEach((to, _from, next) => {
       const allowedRoots: Record<string, string[]> = {
         sadmin: ['overview','analysis','case','graph','system'],
         badmin: ['overview','analysis','case','graph'],
-        madmin: ['analysis','case','graph']
+        madmin: ['analysis','case','graph'],
+        viewer: ['case']
       }
       const roleCode = localStorage.getItem('roleCode') || ''
       const menuPaths = flattenMenuPaths(menus)
       const root = to.path.split('/')[1]
-      const routeAllowed = menuPaths.size > 0
+      const routeAllowed = roleCode === 'viewer'
+        ? to.path === '/case/list'
+        : menuPaths.size > 0
         ? menuPaths.has(to.path) || [...menuPaths].some(path => to.path.startsWith(`${path}/`))
         : (allowedRoots[roleCode] || []).includes(root)
-      routeAllowed ? next() : next('/overview')
+      routeAllowed ? next() : next(landingPath())
     }
   }
 })
+
+function landingPath(): string {
+  return localStorage.getItem('roleCode') === 'viewer' ? '/case/list' : '/overview'
+}
 
 function readMenus(): any[] {
   try {

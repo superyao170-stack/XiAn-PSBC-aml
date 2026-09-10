@@ -29,10 +29,11 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/api-docs", "/api-docs/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/cases").hasAnyRole("sadmin", "badmin", "viewer")
                         .requestMatchers("/api/v1/analysis/**").hasAnyRole("sadmin", "badmin")
                         .requestMatchers("/api/v1/overview/**").hasAnyRole("sadmin", "badmin")
                         .requestMatchers("/api/v1/clues/**", "/api/v1/research-analytics/**").hasAnyRole("sadmin", "badmin")
@@ -40,6 +41,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/graph/**").hasAnyRole("sadmin", "badmin")
                         .requestMatchers(HttpMethod.GET, "/api/v1/system/event-metadata").hasAnyRole("sadmin", "badmin")
                         .requestMatchers("/api/v1/system/**").hasRole("sadmin")
+                        .requestMatchers("/api/v1/auth/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

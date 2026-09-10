@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { loginApi } from '@/api/auth'
 
-const MENU_CACHE_VERSION = 'guided-flow-20260826-v7'
+const MENU_CACHE_VERSION = 'public-viewer-20260830-v1'
 if (localStorage.getItem('menuCacheVersion') !== MENU_CACHE_VERSION) {
   ['token', 'username', 'nickname', 'roleCode', 'bankCode', 'permissions', 'menus']
     .forEach(key => localStorage.removeItem(key))
