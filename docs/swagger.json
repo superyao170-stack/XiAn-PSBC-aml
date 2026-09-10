@@ -1,0 +1,6719 @@
+{
+  "components": {
+    "schemas": {
+      "AnalysisJobRequest": {
+        "description": "分析任务创建参数；结构化案例流程使用 STRUCTURED 类型",
+        "properties": {
+          "bankCode": {
+            "description": "银行编码",
+            "example": "BANK_XA",
+            "type": "string"
+          },
+          "batchId": {
+            "description": "结构化案例上传模式无需批次 ID",
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "inputParams": {
+            "description": "JSON 字符串形式的流程输入参数",
+            "example": "{\"workflow\":\"XI_AN_CASE_PIPELINE\",\"processingMode\":\"SINGLE\",\"recognitionMode\":\"NEW\",\"uploadToken\":\"8b176f43-5f5f-4d57-87f8-7f53bf201b41\",\"caseCount\":1}",
+            "type": "string"
+          },
+          "jobName": {
+            "description": "任务名称",
+            "example": "2026-08-24结构化案例识别",
+            "type": "string"
+          },
+          "jobType": {
+            "description": "任务类型",
+            "enum": [
+              "STRUCTURED"
+            ],
+            "example": "STRUCTURED",
+            "type": "string"
+          },
+          "scenarioCode": {
+            "description": "已启用的业务场景编码",
+            "example": "AML_STRUCTURED_CASE",
+            "type": "string"
+          },
+          "steps": {
+            "description": "按顺序提交的五个处理步骤",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisJobStepRequest"
+            },
+            "type": "array"
+          },
+          "workspaceId": {
+            "description": "工作空间 ID",
+            "example": 1,
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "AnalysisJobStepRequest": {
+        "description": "按顺序提交的五个处理步骤",
+        "properties": {
+          "stepName": {
+            "description": "步骤名称",
+            "example": "可疑报告生成或复用",
+            "type": "string"
+          },
+          "stepType": {
+            "description": "步骤编码",
+            "enum": [
+              "TEXT",
+              "FRAMEWORK",
+              "GRAPH",
+              "ANALYSIS",
+              "PERSIST"
+            ],
+            "example": "TEXT",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AnalysisTextUpdate": {
+        "properties": {
+          "analysisText": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ApprovalRequest": {
+        "properties": {
+          "orderedSimilarCaseIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "riskLevel": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BatchRequest": {
+        "properties": {
+          "caseIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CaseApprovalRequest": {
+        "description": "案例审批请求",
+        "properties": {
+          "approvalOpinion": {
+            "description": "审批意见",
+            "example": "审批通过",
+            "type": "string"
+          },
+          "approvalResult": {
+            "description": "审批结果",
+            "enum": [
+              "APPROVED",
+              "REJECTED"
+            ],
+            "example": "APPROVED",
+            "type": "string"
+          },
+          "approver": {
+            "description": "审批人",
+            "example": "approver01",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approvalResult",
+          "approver"
+        ],
+        "type": "object"
+      },
+      "CaseOverviewUpdateRequest": {
+        "properties": {
+          "businessCaseStatus": {
+            "type": "string"
+          },
+          "businessCaseType": {
+            "type": "string"
+          },
+          "businessDomain": {
+            "type": "string"
+          },
+          "businessRiskLevel": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "disposalMeasure": {
+            "type": "string"
+          },
+          "reportedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reportingDirection": {
+            "type": "string"
+          },
+          "suspectedCrimeType": {
+            "type": "string"
+          },
+          "suspiciousTransactionFeatureCode": {
+            "type": "string"
+          },
+          "triggerPoint": {
+            "type": "string"
+          },
+          "urgencyLevel": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CaseReviewRequest": {
+        "description": "案例复核请求",
+        "properties": {
+          "reviewOpinion": {
+            "description": "复核意见",
+            "example": "交易链路和证据完整，同意进入审批",
+            "type": "string"
+          },
+          "reviewResult": {
+            "description": "复核结果",
+            "enum": [
+              "PASSED",
+              "REJECTED"
+            ],
+            "example": "PASSED",
+            "type": "string"
+          },
+          "reviewer": {
+            "description": "复核人",
+            "example": "reviewer01",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reviewResult",
+          "reviewer"
+        ],
+        "type": "object"
+      },
+      "CaseRunRequest": {
+        "properties": {
+          "algorithmId": {
+            "type": "string"
+          },
+          "algorithmVersion": {
+            "type": "string"
+          },
+          "codeHash": {
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "runType": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CfRiskCase": {
+        "properties": {
+          "approver": {
+            "type": "string"
+          },
+          "atomicMatterProductCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "bankCode": {
+            "type": "string"
+          },
+          "businessCaseStatus": {
+            "type": "string"
+          },
+          "businessCaseType": {
+            "type": "string"
+          },
+          "businessDomain": {
+            "type": "string"
+          },
+          "businessRiskLevel": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "caseName": {
+            "type": "string"
+          },
+          "caseSource": {
+            "type": "string"
+          },
+          "caseStatus": {
+            "type": "string"
+          },
+          "caseType": {
+            "type": "string"
+          },
+          "caseVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "closedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "conflictDetails": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decisionConflict": {
+            "type": "boolean"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "deploymentConfigSnapshotId": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "disposalMeasure": {
+            "type": "string"
+          },
+          "effectiveConfigSnapshotId": {
+            "type": "string"
+          },
+          "eventCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "executionPackageId": {
+            "type": "string"
+          },
+          "graphSnapshotId": {
+            "type": "string"
+          },
+          "graphSnapshotSha256": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "institutionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastProducedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "matterProductCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "orgId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ownerAnalyst": {
+            "type": "string"
+          },
+          "patternName": {
+            "type": "string"
+          },
+          "patternProductCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "productSnapshotCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "productionStatus": {
+            "type": "string"
+          },
+          "recognitionMode": {
+            "type": "string"
+          },
+          "reportedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reportingDirection": {
+            "type": "string"
+          },
+          "reviewer": {
+            "type": "string"
+          },
+          "riskLevel": {
+            "type": "string"
+          },
+          "riskProductCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "riskScore": {
+            "type": "number"
+          },
+          "scenarioCode": {
+            "type": "string"
+          },
+          "scenarioVersion": {
+            "type": "string"
+          },
+          "signalCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sourceCaseNo": {
+            "type": "string"
+          },
+          "structDecision": {
+            "type": "string"
+          },
+          "subjectCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "supersedesCaseVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "suspectedCrimeType": {
+            "type": "string"
+          },
+          "suspiciousTransactionFeatureCode": {
+            "type": "string"
+          },
+          "techniqueProductCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "textDecision": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "number"
+          },
+          "transactionCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "triggerPoint": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "urgencyLevel": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CfRiskEvent": {
+        "properties": {
+          "bankCode": {
+            "type": "string"
+          },
+          "businessId": {
+            "type": "string"
+          },
+          "canonicalEventId": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "caseVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dedupKey": {
+            "type": "string"
+          },
+          "definitionBindingStatus": {
+            "type": "string"
+          },
+          "definitionMatchConfidence": {
+            "type": "number"
+          },
+          "definitionMatchMethod": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "eventFrameCode": {
+            "type": "string"
+          },
+          "eventFrameVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "eventQualityScore": {
+            "type": "number"
+          },
+          "eventStandardCode": {
+            "type": "string"
+          },
+          "eventTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "evidenceRefs": {
+            "type": "string"
+          },
+          "factLevel": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "identityResolutionStatus": {
+            "type": "string"
+          },
+          "lifecycleCode": {
+            "type": "string"
+          },
+          "lifecycleState": {
+            "type": "string"
+          },
+          "lifecycleVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "qualityBreakdown": {
+            "type": "string"
+          },
+          "qualityPolicyVersion": {
+            "type": "string"
+          },
+          "riskLevel": {
+            "type": "string"
+          },
+          "riskScore": {
+            "type": "number"
+          },
+          "ruleName": {
+            "type": "string"
+          },
+          "semanticProfileCode": {
+            "type": "string"
+          },
+          "semanticProfileVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "subjectCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultCfRiskCase": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CfRiskCase"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultGraphEdge": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GraphEdge"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultGraphNode": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GraphNode"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListCfRiskEvent": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CfRiskEvent"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListGraphEdge": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListGraphNode": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListMapStringObject": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": {
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListRiskSignal": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RiskSignal"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListString": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListSysDictData": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SysDictData"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListSysMenu": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SysMenu"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultListSysRole": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SysRole"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultLoginResponse": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginResponse"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultMapStringObject": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultPageResultCfRiskCase": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageResultCfRiskCase"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultPageResultSysUser": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageResultSysUser"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultString": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultSysDictData": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SysDictData"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultSysMenu": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SysMenu"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultSysRole": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SysRole"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultSysUser": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SysUser"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonResultVoid": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "data": {
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DatasetVersionRequest": {
+        "properties": {
+          "bankCode": {
+            "type": "string"
+          },
+          "datasetCode": {
+            "type": "string"
+          },
+          "featureDefinition": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "records": {
+            "items": {
+              "additionalProperties": {
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "scenarioCode": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "sourceRef": {
+            "type": "string"
+          },
+          "splitPolicy": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EventDefinition": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rule": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GraphEdge": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GraphEdgeRequest": {
+        "properties": {
+          "properties": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GraphNode": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "GraphNodeRequest": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "GraphQueryRequest": {
+        "properties": {
+          "cypher": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LoginRequest": {
+        "description": "系统登录请求",
+        "properties": {
+          "password": {
+            "description": "密码",
+            "example": "sadmin@123",
+            "format": "password",
+            "type": "string"
+          },
+          "username": {
+            "description": "用户名",
+            "example": "sadmin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "username"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "description": "登录成功后的用户身份和令牌",
+        "properties": {
+          "bankCode": {
+            "type": "string"
+          },
+          "menus": {
+            "items": {
+              "$ref": "#/components/schemas/MenuDTO"
+            },
+            "type": "array"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "refreshToken": {
+            "description": "刷新令牌",
+            "type": "string"
+          },
+          "roleCode": {
+            "type": "string"
+          },
+          "token": {
+            "description": "调用业务接口时使用的 JWT；粘贴到 Swagger Authorize",
+            "example": "eyJhbGciOiJIUzI1NiJ9...",
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MenuDTO": {
+        "properties": {
+          "component": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "menuName": {
+            "type": "string"
+          },
+          "parentId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PageResultCfRiskCase": {
+        "properties": {
+          "pageNum": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pages": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/CfRiskCase"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PageResultSysUser": {
+        "properties": {
+          "pageNum": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pages": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/SysUser"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ReassignRequest": {
+        "properties": {
+          "assignee": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReplayRequest": {
+        "properties": {
+          "modelId": {
+            "type": "string"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReportUpdate": {
+        "properties": {
+          "analysisText": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReturnRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RiskSignal": {
+        "properties": {
+          "algorithmBindingVersion": {
+            "type": "string"
+          },
+          "algorithmEndpoint": {
+            "type": "string"
+          },
+          "algorithmId": {
+            "type": "string"
+          },
+          "algorithmVersion": {
+            "type": "string"
+          },
+          "bankCode": {
+            "type": "string"
+          },
+          "businessId": {
+            "type": "string"
+          },
+          "contribution": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "deploymentConfigSnapshotId": {
+            "type": "string"
+          },
+          "effectiveConfigSnapshotId": {
+            "type": "string"
+          },
+          "executionPackageId": {
+            "type": "string"
+          },
+          "fusionWeight": {
+            "type": "number"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "inputDataHash": {
+            "type": "string"
+          },
+          "inputDataVersion": {
+            "type": "string"
+          },
+          "institutionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "isFused": {
+            "type": "boolean"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "parentSignalId": {
+            "type": "string"
+          },
+          "pipelineVersion": {
+            "type": "string"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "reasonCodes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recommendedAction": {
+            "type": "string"
+          },
+          "scenarioCode": {
+            "type": "string"
+          },
+          "scenarioVersion": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "signalId": {
+            "type": "string"
+          },
+          "signalType": {
+            "type": "string"
+          },
+          "sourceBatchId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceRefId": {
+            "type": "string"
+          },
+          "sourceRefType": {
+            "type": "string"
+          },
+          "sourceTransactionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "RunRequest": {
+        "properties": {
+          "algorithmId": {
+            "type": "string"
+          },
+          "algorithmVersion": {
+            "type": "string"
+          },
+          "bankCode": {
+            "type": "string"
+          },
+          "codeHash": {
+            "type": "string"
+          },
+          "featureDefinition": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "runType": {
+            "type": "string"
+          },
+          "scenarioCode": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "sourceRef": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ScopeRequest": {
+        "properties": {
+          "bankCode": {
+            "type": "string"
+          },
+          "caseIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "scenarioCode": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ScopeRunRequest": {
+        "properties": {
+          "algorithmId": {
+            "type": "string"
+          },
+          "algorithmVersion": {
+            "type": "string"
+          },
+          "bankCode": {
+            "type": "string"
+          },
+          "caseIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "codeHash": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "runType": {
+            "type": "string"
+          },
+          "scenarioCode": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StepUpdate": {
+        "properties": {
+          "errorMessage": {
+            "type": "string"
+          },
+          "progress": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "resultJson": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SysDictData": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dictLabel": {
+            "type": "string"
+          },
+          "dictType": {
+            "type": "string"
+          },
+          "dictValue": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sortOrder": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SysMenu": {
+        "properties": {
+          "component": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "menuName": {
+            "type": "string"
+          },
+          "parentId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SysRole": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "menus": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "roleCode": {
+            "type": "string"
+          },
+          "roleName": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SysUser": {
+        "properties": {
+          "avatar": {
+            "type": "string"
+          },
+          "bankCode": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "institutionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastLoginIp": {
+            "type": "string"
+          },
+          "lastLoginTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "phone": {
+            "type": "string"
+          },
+          "roleCode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "登录接口返回的 JWT access token",
+        "name": "bearerAuth",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "name": "DataGraph Bank"
+    },
+    "description": "面向银行风险案例处理的 REST API。核心流程：\n\n1. 结构化案例识别：数据上传 → 可疑报告生成/复用 → 框架抽取 → 相似度匹配 → 图谱展示；\n2. 案例流转：案例列表 → 提交复核 → 复核 → 审批。\n\n业务响应统一使用 `CommonResult` 包装。请先调用登录接口取得 JWT，再在 Swagger UI 的 Authorize 中填写 token（无需手工添加 Bearer 前缀）。\n",
+    "title": "DataGraph Bank 后端接口文档",
+    "version": "v1"
+  },
+  "openapi": "3.0.1",
+  "paths": {
+    "/api/v1/aml-intelligence/case-similarity": {
+      "post": {
+        "description": "以 queryCase 对 historyCases 进行召回、重排和 GED 匹配，返回相似度排序。正常业务流程由 STRUCTURED 任务的 ANALYSIS 步骤调用。",
+        "operationId": "matchCases",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "historyCases": [
+                  {
+                    "accounts": [],
+                    "basic_info": {
+                      "case_id": "CASE-HISTORY-001"
+                    },
+                    "customers": [],
+                    "events": [],
+                    "evidences": [],
+                    "other_entities": [],
+                    "relationships": []
+                  }
+                ],
+                "parameters": {
+                  "embeddingRecallThreshold": 0.35,
+                  "gedCandidateLimit": 25
+                },
+                "queryCase": {
+                  "accounts": [],
+                  "basic_info": {
+                    "case_id": "CASE-NEW"
+                  },
+                  "customers": [],
+                  "events": [],
+                  "evidences": [],
+                  "other_entities": [],
+                  "relationships": []
+                }
+              },
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "4. 单独执行案例相似度匹配",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/aml-intelligence/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "aml-intelligence-controller"
+        ]
+      }
+    },
+    "/api/v1/aml-intelligence/text-generation": {
+      "post": {
+        "description": "根据案例基本信息、客户和交易特征生成两版分析文本及段落审核结果。正常业务流程由 STRUCTURED 任务的 TEXT 步骤调用；该接口用于独立调试或集成。",
+        "operationId": "generateText",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "basicInfo": {
+                  "case_id": "CASE-2026-001",
+                  "case_name": "可疑资金快进快出"
+                },
+                "customers": [
+                  {
+                    "customer_name": "张某",
+                    "entity_id": "CUS-001"
+                  }
+                ],
+                "knowledgeBase": {},
+                "transactionFeatures": {
+                  "summary": "资金到账后短时间内分散转出",
+                  "transaction_count": 18
+                }
+              },
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "2. 单独生成可疑报告",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/analysis/anti-fraud-case-batch-file": {
+      "post": {
+        "description": "上传一个 CSV/XLSX（最大 100MB）。NEW 第五列为 event_chain；HISTORICAL 第五列为 text_analysis。每个单元格为对应 JSON。",
+        "operationId": "uploadAntiFraudCaseBatchFile",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recognitionMode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "上传批量反欺诈案例数据",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/analysis/anti-fraud-case-files": {
+      "post": {
+        "description": "基础信息、客户、账户、设备为必填直映射数据；NEW 另传 event_chain.json，HISTORICAL 另传 text_analysis.json。",
+        "operationId": "uploadAntiFraudCaseFiles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recognitionMode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "accounts": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "basicInfo": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "customers": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "devices": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "eventChain": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "textAnalysis": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accounts",
+                  "basicInfo",
+                  "customers",
+                  "devices"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "上传单个反欺诈案例",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/analysis/jobs": {
+      "get": {
+        "operationId": "jobs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "jobType",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batchId",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageNum",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "operations-controller"
+        ]
+      },
+      "post": {
+        "description": "使用上传接口返回的 uploadToken 创建任务，并自动排队执行。结构化案例标准步骤为：\n\n1. TEXT：NEW 生成可疑报告，HISTORICAL 复用 analysis_texts.json；\n2. FRAMEWORK：从报告抽取 basic_info、customers、accounts、other_entities、events、relationships、evidences；\n3. GRAPH：生成并持久化图谱快照；\n4. ANALYSIS：与固定历史案例快照执行 BGE/Reranker/GED 相似度匹配；\n5. PERSIST：固化案例、任务血缘和处理结果。\n\n`jobType` 必须为 STRUCTURED，`inputParams` 是 JSON 字符串，其中 workflow 必须为\nXI_AN_CASE_PIPELINE，并携带 processingMode、recognitionMode 和 uploadToken。\n",
+        "operationId": "create_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "2-4. 创建并执行案例上传任务",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/analysis/jobs/{jobId}": {
+      "delete": {
+        "operationId": "delete_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      },
+      "get": {
+        "description": "轮询上传任务的校验、入库及历史案例框架抽取、basic_info.risk_level 自动定级和入图进度；缺少或无法识别风险等级的历史案例转入复核审批；失败时返回当前原因、阶段明细及历次重试记录。",
+        "operationId": "detail_3",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "5. 查询上传任务、失败明细与分步结果",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/analysis/jobs/{jobId}/cancel": {
+      "put": {
+        "operationId": "cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/jobs/{jobId}/retry": {
+      "put": {
+        "operationId": "retry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/jobs/{jobId}/start": {
+      "put": {
+        "operationId": "start",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/jobs/{jobId}/steps/{stepOrder}": {
+      "put": {
+        "operationId": "updateStep",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "stepOrder",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/jobs/{jobId}/structured-results/{caseId}/analysis-text": {
+      "put": {
+        "operationId": "updateStructuredResultAnalysisText",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisTextUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/structured-case-batch-file": {
+      "post": {
+        "description": "上传一个 CSV 或 XLSX（最大 100MB），服务端校验后返回 uploadToken、案例数和校验结果。",
+        "operationId": "uploadStructuredCaseBatchFile",
+        "parameters": [
+          {
+            "description": "识别类型",
+            "example": "NEW",
+            "in": "query",
+            "name": "recognitionMode",
+            "required": true,
+            "schema": {
+              "enum": [
+                "NEW",
+                "HISTORICAL"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "description": "批量案例 CSV/XLSX 文件",
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "1B. 上传批量结构化案例数据",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/analysis/structured-case-files": {
+      "post": {
+        "description": "上传后返回 `uploadToken`，供“新建上传任务”使用。单案例必须包含\n`basic_info.json` 与 `customers.json`；`accounts.json` 和 `other_entities.json` 可选。\n\n- NEW：系统生成可疑报告，禁止上传 analysis_texts.json；\n- HISTORICAL：复用历史可疑报告，必须上传 analysis_texts.json；\n- 单个文件及全部文件合计均不得超过 100MB。\n",
+        "operationId": "uploadStructuredCaseFile",
+        "parameters": [
+          {
+            "description": "识别类型：NEW=新增案例，HISTORICAL=历史案例",
+            "example": "NEW",
+            "in": "query",
+            "name": "recognitionMode",
+            "required": false,
+            "schema": {
+              "enum": [
+                "NEW",
+                "HISTORICAL"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "accounts": {
+                    "description": "accounts.json；可选账户数组",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "analysisTexts": {
+                    "description": "analysis_texts.json；仅 HISTORICAL 必传",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "basicInfo": {
+                    "description": "basic_info.json；顶层对象，必须包含非空 case_id",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "customers": {
+                    "description": "customers.json；非空客户数组，每项必须包含 entity_id",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "otherEntities": {
+                    "description": "other_entities.json；可选其他实体数组",
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "basicInfo",
+                  "customers"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "1A. 上传单个结构化案例数据",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/analysis/worker-config": {
+      "get": {
+        "operationId": "workerConfig",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "jobType",
+            "required": false,
+            "schema": {
+              "default": "UNSTRUCTURED",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultString"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateWorkerConfig",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "jobType",
+            "required": false,
+            "schema": {
+              "default": "UNSTRUCTURED",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/worker-file": {
+      "get": {
+        "operationId": "workerFile",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "jobType",
+            "required": false,
+            "schema": {
+              "default": "UNSTRUCTURED",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultString"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateWorkerFile",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "jobType",
+            "required": false,
+            "schema": {
+              "default": "UNSTRUCTURED",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/worker-files": {
+      "get": {
+        "operationId": "workerFiles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "jobType",
+            "required": false,
+            "schema": {
+              "default": "UNSTRUCTURED",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListString"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/analysis/worker-upload": {
+      "post": {
+        "operationId": "uploadWorker",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "jobType",
+            "required": false,
+            "schema": {
+              "default": "UNSTRUCTURED",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "analysis-controller"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "输入系统用户名和密码。成功后复制响应 data.token，点击 Swagger UI 右上角 Authorize 并粘贴 token。",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultLoginResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [],
+        "summary": "0. 登录并获取 JWT",
+        "tags": [
+          "auth-controller"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "auth-controller"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "auth-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateCurrentUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "auth-controller"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [],
+        "tags": [
+          "auth-controller"
+        ]
+      }
+    },
+    "/api/v1/case-processing": {
+      "get": {
+        "operationId": "page",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "stage",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recognitionMode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "caseId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageNum",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-processing-controller"
+        ]
+      }
+    },
+    "/api/v1/case-processing/actions/{action}": {
+      "post": {
+        "operationId": "process",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-processing-controller"
+        ]
+      }
+    },
+    "/api/v1/case-processing/similarity-graph/approved": {
+      "get": {
+        "operationId": "approvedSimilarityGraph",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-processing-controller"
+        ]
+      }
+    },
+    "/api/v1/case-processing/{caseId}": {
+      "get": {
+        "operationId": "detail_2",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-processing-controller"
+        ]
+      }
+    },
+    "/api/v1/case-processing/{caseId}/approve": {
+      "put": {
+        "operationId": "approve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-processing-controller"
+        ]
+      }
+    },
+    "/api/v1/case-processing/{caseId}/report": {
+      "put": {
+        "operationId": "updateReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-processing-controller"
+        ]
+      }
+    },
+    "/api/v1/cases": {
+      "get": {
+        "description": "分页查询案例。复核工作台使用 caseStatus=IN_REVIEW，审批工作台使用 caseStatus=PENDING_APPROVAL。",
+        "operationId": "getCases",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pageNum",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "caseId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "caseStatus",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "riskLevel",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recognitionMode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bankCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "jobId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultPageResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "1. 查询案例列表",
+        "tags": [
+          "案例复核审批流程"
+        ]
+      },
+      "post": {
+        "operationId": "createCase",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CfRiskCase"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/suspicious-transactions": {
+      "get": {
+        "operationId": "getSuspiciousTransactions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pageNum",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batchId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}": {
+      "delete": {
+        "operationId": "deleteCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      },
+      "get": {
+        "description": "在提交、复核或审批前读取案例完整信息。",
+        "operationId": "getCaseById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "2. 查询案例详情",
+        "tags": [
+          "案例复核审批流程"
+        ]
+      },
+      "put": {
+        "operationId": "updateCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CfRiskCase"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/approve": {
+      "put": {
+        "description": "仅 PENDING_APPROVAL 状态可操作。APPROVED 后进入 APPROVED；REJECTED 后进入 REJECTED。",
+        "operationId": "approveCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "5. 审批案例",
+        "tags": [
+          "案例复核审批流程"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/close": {
+      "put": {
+        "operationId": "closeCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains": {
+      "get": {
+        "operationId": "coreChains",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/current": {
+      "get": {
+        "operationId": "currentCoreChain",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/refresh": {
+      "post": {
+        "operationId": "refreshCoreChain",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/{chainId}": {
+      "get": {
+        "operationId": "coreChain",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "chainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/{chainId}/claims": {
+      "get": {
+        "operationId": "coreChainClaims",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "chainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/{chainId}/evidence": {
+      "get": {
+        "operationId": "coreChainEvidence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "chainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/{chainId}/graph": {
+      "get": {
+        "operationId": "coreChainGraph",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "chainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/{chainId}/reproject": {
+      "post": {
+        "operationId": "reprojectCoreChain",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "chainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/core-chains/{chainId}/validate": {
+      "get": {
+        "operationId": "validateCoreChain",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "chainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/events": {
+      "get": {
+        "operationId": "getCaseEvents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListCfRiskEvent"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/investigation-hypotheses/{hypothesisId}": {
+      "put": {
+        "operationId": "updateInvestigationHypothesis",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "hypothesisId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/knowledge-explanation-chains": {
+      "get": {
+        "operationId": "knowledgeExplanationChains",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "FULL",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 220,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/matter-explanations": {
+      "get": {
+        "operationId": "matters",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/matter-explanations/refresh": {
+      "post": {
+        "operationId": "refresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/matter-explanations/{matterId}/evidence": {
+      "get": {
+        "operationId": "evidence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "matterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/matter-explanations/{matterId}/feedback": {
+      "put": {
+        "operationId": "feedback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "matterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/overview": {
+      "put": {
+        "operationId": "updateCaseOverview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseOverviewUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/reasoning": {
+      "get": {
+        "operationId": "reasoning",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/reassign": {
+      "put": {
+        "operationId": "reassign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/reopen": {
+      "put": {
+        "operationId": "reopen",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/return": {
+      "put": {
+        "operationId": "returnCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/review": {
+      "put": {
+        "description": "仅 IN_REVIEW 状态可操作。PASSED 后进入 PENDING_APPROVAL；REJECTED 后进入 REJECTED。",
+        "operationId": "reviewCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "4. 复核案例",
+        "tags": [
+          "案例复核审批流程"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/review-suggestions": {
+      "get": {
+        "operationId": "suggestions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/review-suggestions/{suggestionId}": {
+      "put": {
+        "operationId": "updateSuggestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "suggestionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/signals": {
+      "get": {
+        "operationId": "getCaseSignals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListRiskSignal"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/submit": {
+      "put": {
+        "description": "仅 DRAFT 状态可提交。成功后创建 REVIEW、APPROVAL 两步工作流，案例进入 IN_REVIEW。",
+        "operationId": "submitCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultCfRiskCase"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "3. 提交案例复核",
+        "tags": [
+          "案例复核审批流程"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/technique-occurrences": {
+      "get": {
+        "operationId": "techniques",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-matter-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/worker-result": {
+      "get": {
+        "operationId": "workerResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "case-controller"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/workflow": {
+      "get": {
+        "description": "返回当前案例最近工作流实例及 REVIEW、APPROVAL 步骤的处理人、状态、结果、意见和时间。",
+        "operationId": "workflow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "6. 查询复核审批轨迹",
+        "tags": [
+          "案例复核审批流程"
+        ]
+      }
+    },
+    "/api/v1/clues": {
+      "get": {
+        "operationId": "list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "clueType",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "analysisRunId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageNum",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      },
+      "post": {
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      }
+    },
+    "/api/v1/clues/analyze": {
+      "post": {
+        "operationId": "analyze",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      }
+    },
+    "/api/v1/clues/runs": {
+      "get": {
+        "operationId": "runs_1",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bankCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      }
+    },
+    "/api/v1/clues/{clueId}": {
+      "delete": {
+        "operationId": "delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clueId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      },
+      "get": {
+        "operationId": "detail_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clueId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      },
+      "put": {
+        "operationId": "update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clueId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      }
+    },
+    "/api/v1/clues/{clueId}/merge/{caseId}": {
+      "post": {
+        "operationId": "merge",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clueId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      }
+    },
+    "/api/v1/clues/{clueId}/status": {
+      "patch": {
+        "operationId": "updateStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clueId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "clue-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/case-fallback": {
+      "post": {
+        "operationId": "createCaseFallback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/case-rebuild": {
+      "post": {
+        "operationId": "rebuildCaseGraph",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/case-subgraph": {
+      "get": {
+        "description": "按案例 ID 返回已持久化的节点与边，用于识别结果的图谱展示。响应包含 caseId、nodes、edges、engine 和 database。",
+        "operationId": "getCaseSubgraph",
+        "parameters": [
+          {
+            "description": "识别任务固化后的案例 ID",
+            "example": "CASE-2026-001",
+            "in": "query",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "6. 展示案例图谱",
+        "tags": [
+          "结构化案例识别流程"
+        ]
+      }
+    },
+    "/api/v1/graph/edges": {
+      "get": {
+        "operationId": "getEdges",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListGraphEdge"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createEdge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphEdgeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultGraphEdge"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/engines": {
+      "get": {
+        "operationId": "engineStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/nodes": {
+      "get": {
+        "operationId": "getNodes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListGraphNode"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createNode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphNodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultGraphNode"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/query": {
+      "post": {
+        "operationId": "executeQuery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/schema": {
+      "get": {
+        "operationId": "getSchema",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/graph/subgraph": {
+      "get": {
+        "operationId": "getSubgraph",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "nodeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "graph-controller"
+        ]
+      }
+    },
+    "/api/v1/overview": {
+      "get": {
+        "operationId": "overview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "startDate",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "overview-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/artifacts/{artifactId}/review": {
+      "put": {
+        "operationId": "reviewArtifact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifactId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/cases/{caseId}/context": {
+      "get": {
+        "operationId": "caseContext",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/cases/{caseId}/runs": {
+      "post": {
+        "operationId": "executeCaseRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/datasets/versions": {
+      "get": {
+        "operationId": "datasetVersions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bankCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "datasetCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createDatasetVersion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/datasets/versions/{datasetVersionId}": {
+      "get": {
+        "operationId": "datasetVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "datasetVersionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/datasets/versions/{datasetVersionId}/status": {
+      "put": {
+        "operationId": "updateDatasetVersionStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "datasetVersionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/knowledge": {
+      "get": {
+        "operationId": "knowledge",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bankCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/knowledge/{knowledgeId}": {
+      "get": {
+        "operationId": "knowledgeDetail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "knowledgeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/knowledge/{knowledgeId}/status": {
+      "put": {
+        "operationId": "updateKnowledgeStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "knowledgeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/runs": {
+      "get": {
+        "operationId": "runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bankCode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "caseId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceRef",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      },
+      "post": {
+        "operationId": "execute",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/runs/{originalRunId}/replay": {
+      "post": {
+        "operationId": "replay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "originalRunId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/runs/{runId}": {
+      "get": {
+        "operationId": "detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/runs/{runId}/artifacts": {
+      "get": {
+        "operationId": "artifacts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageNum",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "artifactType",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/scopes/context": {
+      "post": {
+        "operationId": "scopeContext",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/research-analytics/scopes/runs": {
+      "post": {
+        "operationId": "executeScopeRun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "risk-analytics-controller"
+        ]
+      }
+    },
+    "/api/v1/system/dict/{dictType}": {
+      "get": {
+        "operationId": "getDictData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dictType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListSysDictData"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createDictData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dictType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysDictData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysDictData"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    },
+    "/api/v1/system/dict/{dictType}/{id}": {
+      "delete": {
+        "operationId": "deleteDictData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dictType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateDictData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dictType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysDictData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysDictData"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    },
+    "/api/v1/system/event-metadata": {
+      "get": {
+        "operationId": "getEventMetadata",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "default": "AML",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "event-metadata-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createEvent",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "default": "AML",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "event-metadata-controller"
+        ]
+      }
+    },
+    "/api/v1/system/event-metadata/{eventId}": {
+      "delete": {
+        "operationId": "deleteEvent",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "default": "AML",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "event-metadata-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateEvent",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scenarioCode",
+            "required": false,
+            "schema": {
+              "default": "AML",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "event-metadata-controller"
+        ]
+      }
+    },
+    "/api/v1/system/menus": {
+      "get": {
+        "operationId": "getMenus",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListSysMenu"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createMenu",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysMenu"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysMenu"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    },
+    "/api/v1/system/menus/{id}": {
+      "delete": {
+        "operationId": "deleteMenu",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateMenu",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysMenu"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysMenu"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    },
+    "/api/v1/system/roles": {
+      "get": {
+        "operationId": "getRoles",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultListSysRole"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createRole",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysRole"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysRole"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    },
+    "/api/v1/system/roles/{id}": {
+      "delete": {
+        "operationId": "deleteRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysRole"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysRole"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    },
+    "/api/v1/system/users": {
+      "get": {
+        "operationId": "getUsers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pageNum",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultPageResultSysUser"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysUser"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    },
+    "/api/v1/system/users/{id}": {
+      "delete": {
+        "operationId": "deleteUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultVoid"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "get": {
+        "operationId": "getUserById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysUser"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      },
+      "put": {
+        "operationId": "updateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SysUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResultSysUser"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "system-controller"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Generated server url",
+      "url": "http://localhost:3030"
+    }
+  ],
+  "tags": [
+    {
+      "description": "数据上传、识别任务执行、可疑报告、框架抽取、相似度匹配和案例图谱查询。",
+      "name": "结构化案例识别流程"
+    },
+    {
+      "description": "状态主链：DRAFT → IN_REVIEW → PENDING_APPROVAL → APPROVED；复核或审批拒绝后进入 REJECTED。",
+      "name": "案例复核审批流程"
+    }
+  ]
+}
