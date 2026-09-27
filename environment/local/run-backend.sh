@@ -5,20 +5,20 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 if [[ "$(uname -s)" == "Darwin" && -x /usr/libexec/java_home ]]; then
-  export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+  export JAVA_HOME="$(/usr/libexec/java_home -v 25)"
 elif [[ -z "${JAVA_HOME:-}" ]]; then
   JAVA_BIN="$(command -v java || true)"
   if [[ -z "$JAVA_BIN" ]]; then
-    echo "未找到 Java 17，请先安装 JDK 17。" >&2
+    echo "未找到 Java 25，请先安装 JDK 25。" >&2
     exit 1
   fi
   export JAVA_HOME="$(cd "$(dirname "$JAVA_BIN")/.." && pwd)"
 fi
 
 JAVA_VERSION="$($JAVA_HOME/bin/java -version 2>&1 | head -n 1)"
-if [[ ! "$JAVA_VERSION" =~ \"17([.\"]|$) ]]; then
-  echo "当前不是 Java 17：$JAVA_VERSION" >&2
-  echo "请设置 JAVA_HOME 为 JDK 17 后重试。" >&2
+if [[ ! "$JAVA_VERSION" =~ \"25([.\"]|$) ]]; then
+  echo "当前不是 Java 25：$JAVA_VERSION" >&2
+  echo "请设置 JAVA_HOME 为 JDK 25 后重试。" >&2
   exit 1
 fi
 

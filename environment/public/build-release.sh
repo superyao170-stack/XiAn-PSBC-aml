@@ -7,7 +7,7 @@ trap 'rm -rf "$release_dir"' EXIT
 
 cd "$project_root"
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+  export JAVA_HOME="$(/usr/libexec/java_home -v 25)"
 fi
 mvn -f backend/pom.xml clean package
 npm --prefix frontend ci

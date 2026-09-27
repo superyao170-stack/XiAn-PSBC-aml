@@ -18,14 +18,14 @@
 # 首次运行：创建两个 AML Worker 共用的 Python 环境
 bash tools/setup-worker-environment.sh
 
-# 启动后端（会检查 Java 17 和结构化案例 Worker 环境）
+# 启动后端（会检查 Java 25 和结构化案例 Worker 环境）
 bash environment/local/run-backend.sh
 
 # 前端开发
 cd frontend && npm run dev
 
 # 后端测试
-JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -f backend/pom.xml test
+JAVA_HOME=$(/usr/libexec/java_home -v 25) mvn -f backend/pom.xml test
 
 # 前端构建
 npm --prefix frontend run build

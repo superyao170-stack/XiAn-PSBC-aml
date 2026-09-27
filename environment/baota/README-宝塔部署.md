@@ -37,7 +37,7 @@ bash environment/baota/scripts/install.sh
 
 - 运行目录：`/www/wwwroot/bankgraph/backend`
 - JAR：`/www/wwwroot/bankgraph/backend/app.jar`
-- Java：17
+- Java：25
 - 端口：3030
 - 运行用户：`www`
 

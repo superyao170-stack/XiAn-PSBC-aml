@@ -19,9 +19,9 @@
     <description>DataGraph Bank Backend Service</description>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>25</java.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
-        <postgresql.version>42.7.3</postgresql.version>
+        <postgresql.version>42.7.12</postgresql.version>
         <flyway.version>9.22.3</flyway.version>
         <springdoc.version>2.5.0</springdoc.version>
         <jjwt.version>0.12.5</jjwt.version>
