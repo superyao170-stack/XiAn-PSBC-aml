@@ -237,6 +237,7 @@ class BankCaseWorkflow:
         self,
         input_path: Path | str | Mapping[str, Any] | CsvCaseInput,
         run_dir: Path | None = None,
+        on_progress: Callable[[str, str, Dict[str, Any]], None] | None = None,
     ) -> Tuple[IllegalBehaviorCase, Path]:
         """Run one case, parallelizing its independent preprocessing branches."""
 
@@ -254,6 +255,7 @@ class BankCaseWorkflow:
                 step_name,
                 state,
             ),
+            on_progress=on_progress,
         )
         dump_json(run_dir / "final_case.json", final_result)
         return final_result, run_dir
@@ -270,6 +272,7 @@ class BankCaseWorkflow:
         self,
         input_data: Path | str | Mapping[str, Any] | CsvCaseInput,
         on_step: Callable[[str, Dict[str, Any]], None] | None = None,
+        on_progress: Callable[[str, str, Dict[str, Any]], None] | None = None,
     ) -> IllegalBehaviorCase:
         """Run the shared extraction graph and optionally persist each step."""
 
@@ -294,9 +297,17 @@ class BankCaseWorkflow:
             ("07_relationship_extraction", self.relationship_extractor),
             ("08_merge", self.merger),
         ):
+            if on_progress is not None and step_name in {
+                "06_event_extraction", "07_relationship_extraction"
+            }:
+                on_progress(step_name, "RUNNING", state)
             state.update(node.process(state))
             if on_step is not None:
                 on_step(step_name, state)
+            if on_progress is not None and step_name in {
+                "06_event_extraction", "07_relationship_extraction"
+            }:
+                on_progress(step_name, "SUCCEEDED", state)
 
         return state["final_result"]
 

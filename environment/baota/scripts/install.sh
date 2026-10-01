@@ -3,10 +3,10 @@ set -euo pipefail
 
 BASE=/www/wwwroot/bankgraph
 ENV_FILE="$BASE/environment/config/.env.production"
-JAVA=/www/server/java/jdk-17.0.8/bin/java
+JAVA=/www/server/java/jdk-25/bin/java
 
 [ "$(id -u)" = "0" ] || { echo "Run this script as root in the Baota terminal" >&2; exit 1; }
-[ -x "$JAVA" ] || { echo "Java 17 not found: $JAVA" >&2; exit 1; }
+[ -x "$JAVA" ] || { echo "Java 25 not found: $JAVA" >&2; exit 1; }
 [ -f "$BASE/backend/app.jar" ] || { echo "Missing backend/app.jar" >&2; exit 1; }
 [ -f "$BASE/frontend/dist/index.html" ] || { echo "Missing frontend/dist/index.html" >&2; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "Missing environment/config/.env.production" >&2; exit 1; }

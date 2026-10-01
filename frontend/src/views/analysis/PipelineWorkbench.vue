@@ -185,41 +185,58 @@
         <el-button v-else type="primary" :loading="saving" @click="createJob">开始执行</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="taskDetailVisible" title="任务详情" width="900px">
-      <el-descriptions v-if="currentJob" :column="3" border>
-        <el-descriptions-item label="任务ID">{{ currentJob.jobId }}</el-descriptions-item>
-        <el-descriptions-item label="任务名称">{{ currentJob.jobName }}</el-descriptions-item>
-        <el-descriptions-item label="任务状态">{{ statusText(currentJob.status) }} · {{ currentJob.progress || 0 }}%</el-descriptions-item>
-        <el-descriptions-item label="输入批次">{{ batchText(currentJob) }}</el-descriptions-item>
-        <el-descriptions-item label="业务场景">{{ currentJob.scenarioCode || '未指定' }}</el-descriptions-item>
-        <el-descriptions-item label="所属银行">{{ currentJob.bankCode }}</el-descriptions-item>
-        <el-descriptions-item label="候选信号">{{ currentJob.signalCount || 0 }}</el-descriptions-item>
-        <el-descriptions-item label="待研判">{{ currentJob.pendingReviewCount || 0 }}</el-descriptions-item>
-        <el-descriptions-item label="生成案例">{{ currentJob.caseCount || 0 }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间" :span="3">{{ formatDateTime(currentJob.createdAt) }}</el-descriptions-item>
-      </el-descriptions>
-      <el-alert v-if="currentJob?.errorMessage" class="job-failure" type="error" show-icon :closable="false" :title="`失败原因：${currentJob.errorMessage}`" />
-      <el-table v-if="currentJob?.steps?.length" :data="currentJob.steps" class="detail-steps" size="small">
-        <el-table-column prop="stepOrder" label="序号" width="64" />
-        <el-table-column prop="stepName" label="执行阶段" min-width="180" />
-        <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag size="small" :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag></template></el-table-column>
-        <el-table-column label="进度" width="150"><template #default="{ row }"><el-progress :percentage="row.progress || 0" :stroke-width="8" /></template></el-table-column>
-        <el-table-column label="完成时间" width="170"><template #default="{ row }">{{ formatDateTime(row.completedAt) }}</template></el-table-column>
-        <el-table-column label="失败明细" min-width="220"><template #default="{ row }"><span class="step-error">{{ row.errorMessage || '—' }}</span></template></el-table-column>
-      </el-table>
-      <template v-if="currentJob?.failureHistory?.length">
-        <h4 class="failure-history-title">失败与重试记录</h4>
-        <el-table :data="currentJob.failureHistory" size="small" border>
-          <el-table-column label="失败时间" width="170"><template #default="{row}">{{ formatDateTime(row.failedAt) }}</template></el-table-column>
-          <el-table-column prop="failedStepName" label="失败阶段" width="160" />
-          <el-table-column prop="errorMessage" label="失败原因" min-width="260" show-overflow-tooltip />
-          <el-table-column label="重试状态" width="170"><template #default="{row}">{{ row.retriedAt ? `${formatDateTime(row.retriedAt)} 已重试` : '尚未重试' }}</template></el-table-column>
+    <el-dialog v-model="taskDetailVisible" title="" width="1240px" class="job-detail-dialog">
+      <div v-if="currentJob" class="trajectory-header">
+        <div><h2>任务执行轨迹</h2><p>{{ currentJob.jobName || '未命名任务' }} <span>·</span> {{ currentJob.jobId }}</p></div>
+        <div class="trajectory-status" :class="'status-' + String(currentJob.status || '').toLowerCase()"><i></i>{{ statusText(currentJob.status) }} · {{ currentJob.progress || 0 }}%</div>
+      </div>
+      <section v-if="currentJob" class="upload-progress-card">
+        <div class="upload-file-icon">{{ fileExtension(currentJob) }}</div>
+        <div class="upload-file-info"><strong :title="sourceFileName(currentJob)">{{ sourceFileName(currentJob) }}</strong><span>{{ processingModeText(currentJob) }}<template v-if="currentJob.batchNo"> · 批次 {{ currentJob.batchNo }}</template><template v-if="currentJob.createdAt"> · 创建于 {{ formatDateTime(currentJob.createdAt) }}</template></span><el-progress :percentage="Number(currentJob.progress || 0)" :stroke-width="8" :status="currentJob.status==='FAILED'?'exception':undefined" /></div>
+        <div class="upload-current-count">{{ currentJob.status==='RUNNING' ? '正在处理' : currentJob.status==='SUCCEEDED' ? '已处理' : '输入案例' }}<strong>{{ currentJob.caseCount || caseTotalAcrossJob(currentJob) || 0 }} 个案例</strong></div>
+      </section>
+      <div class="trajectory-layout">
+        <section class="trajectory-main">
+          <div class="trajectory-section-heading"><strong>处理阶段</strong><span>{{ timelineProgressHint(currentJob) }}</span></div>
+          <el-collapse v-if="currentJob" v-model="expandedStepNames" class="timeline-collapse">
+            <div v-for="(stage, index) in timelineStages(currentJob)" :key="stage.id" class="timeline-step" :class="'timeline-' + String(stage.status || '').toLowerCase()">
+              <div class="timeline-marker"><span>{{ timelineMarker(stage.status) }}</span><i v-if="index < timelineStages(currentJob).length - 1"></i></div>
+              <el-collapse-item :name="stage.id" class="timeline-collapse-item">
+                <template #title><div class="timeline-step-content"><div class="timeline-step-heading"><strong>{{ stage.name }}</strong><el-tag size="small" :type="statusType(stage.status)">{{ stageStatusText(stage.status) }}</el-tag><span class="timeline-time">{{ stage.timeLabel }}</span></div><div class="timeline-step-expand">{{ expandedStepNames.includes(stage.id) ? '收起阶段详情' : stage.status==='RUNNING' ? '查看当前阶段详情' : '查看阶段详情' }} <span>{{ expandedStepNames.includes(stage.id) ? '⌃' : '⌄' }}</span></div></div></template>
+                <div class="step-drawer-body">
+                  <p class="stage-detail-note">{{ stage.detail }}</p>
+                  <el-progress v-if="stage.sourceStep" :percentage="stage.sourceStep.progress || 0" :stroke-width="7" :status="stage.sourceStep.status==='FAILED'?'exception':undefined" />
+                  <div v-if="stage.sourceStep" class="step-drawer-meta"><span>阶段开始：{{ stage.sourceStep.startedAt ? formatDateTime(stage.sourceStep.startedAt) : '未记录' }}</span><span>阶段完成：{{ stage.sourceStep.completedAt ? formatDateTime(stage.sourceStep.completedAt) : '进行中 / 尚未完成' }}</span></div>
+                  <el-alert v-if="stage.sourceStep?.errorMessage" class="step-inline-error" type="error" show-icon :closable="false" :title="stage.sourceStep.errorMessage" />
+                  <div v-if="stage.dataStep && isFrameworkStep(stage.dataStep) && stepProgress(stage.dataStep).currentCase && stage.status==='RUNNING'" class="current-case-progress"><div class="current-case-heading"><strong>当前处理位置</strong><el-tag size="small" type="warning">{{ stageStatusText(stepProgress(stage.dataStep).currentStageStatus) }}</el-tag></div><div class="current-case-line">第 {{ stepProgress(stage.dataStep).currentCase.caseIndex || '—' }} / {{ stepProgress(stage.dataStep).caseTotal || stepProgress(stage.dataStep).currentCase.caseTotal || '—' }} 个案例 <span>·</span>{{ stepProgress(stage.dataStep).currentCase.caseId || '案例编号待返回' }} <span>·</span>{{ stageName(stepProgress(stage.dataStep).currentStage) }}</div></div>
+                  <el-descriptions v-if="stage.sourceStep && stepResult(stage.sourceStep)?.performance" :column="3" border size="small" class="step-result-summary"><el-descriptions-item label="案例数">{{ stepResult(stage.sourceStep).caseCount || stepResult(stage.sourceStep).results?.length || 0 }}</el-descriptions-item><el-descriptions-item label="总耗时">{{ stepResult(stage.sourceStep).performance.totalSeconds }} 秒</el-descriptions-item><el-descriptions-item label="入库数">{{ stepResult(stage.sourceStep).persistedCaseCount || 0 }}</el-descriptions-item></el-descriptions>
+                  <el-descriptions v-else-if="stage.sourceStep && stepResult(stage.sourceStep) && !isFrameworkStep(stage.sourceStep)" :column="2" border size="small" class="step-result-summary"><el-descriptions-item v-for="entry in stepSummaryEntries(stage.sourceStep)" :key="entry.label" :label="entry.label">{{ entry.value }}</el-descriptions-item></el-descriptions>
+                  <el-table v-if="stage.rows.length" :data="stage.rows" size="small" max-height="190" class="stage-case-table" row-key="caseId"><el-table-column label="案例" min-width="170" show-overflow-tooltip><template #default="{ row: item }"><span>{{ item.caseName || item.caseId }}</span><small class="case-id-sub">{{ item.caseId }}</small></template></el-table-column><el-table-column label="本阶段状态" width="115"><template #default="{ row: item }"><el-tag size="small" :type="statusType(item[stage.statusKey])">{{ stageStatusText(item[stage.statusKey]) }}</el-tag></template></el-table-column><el-table-column v-if="stage.countKey" :label="stage.countLabel" width="115"><template #default="{ row: item }">{{ item[stage.countKey] ?? 0 }}</template></el-table-column></el-table>
+                </div>
+              </el-collapse-item>
+            </div>
+          </el-collapse>
+          <el-empty v-else :image-size="48" description="暂无阶段执行记录" />
+        </section>
+        <aside class="trajectory-aside">
+          <section class="trajectory-side-card"><h3>处理结果</h3><div class="result-line"><span>读取记录</span><strong>{{ resultReadCount(currentJob) }} 条</strong></div><div class="result-line"><span>成功入库</span><strong>{{ stageResultCount(currentJob, 'databaseStatus', 'SUCCEEDED') }} 条</strong></div><div class="result-line"><span>跳过记录</span><strong>{{ skippedCaseCount(currentJob) }} 条</strong></div><div class="result-line"><span>失败记录</span><strong>{{ failedCaseCount(currentJob) }} 条</strong></div></section>
+          <section class="trajectory-side-card"><h3>任务归属</h3><div class="result-line"><span>银行</span><strong>{{ currentJob.bankCode || '—' }}</strong></div><div class="result-line"><span>场景</span><strong>{{ currentJob.scenarioCode || '未指定' }}</strong></div><div class="result-line"><span>处理方式</span><strong>{{ processingModeText(currentJob) }}</strong></div><div class="result-line"><span>任务类型</span><strong>{{ jobRecognitionMode(currentJob)==='HISTORICAL' ? '历史案例抽取' : jobRecognitionMode(currentJob)==='NEW' ? '新增案例处理' : '案例上传' }}</strong></div></section>
+          <div class="trajectory-tip" :class="{ 'tip-failed': currentJob.status==='FAILED' }">{{ currentJob.status==='FAILED' ? '任务执行失败：' + (currentJob.errorMessage || '请展开失败阶段查看原因') : currentJob.status==='SUCCEEDED' ? '任务已完成。展开任一阶段可查看该阶段的处理结果与执行记录。' : '任务处理中。展开当前阶段可查看正在处理的案例与阶段结果。' }}</div>
+        </aside>
+      </div>
+      <section v-if="jobCaseRows(currentJob).length" class="case-progress-block trajectory-case-progress">
+        <div class="case-progress-heading"><strong>抽取与入图的逐案例进度</strong><span>{{ caseStageSummary(currentJob) }}</span></div>
+        <el-table :data="jobCaseRows(currentJob)" size="small" max-height="300" row-key="caseId" empty-text="等待 Worker 返回案例进度">
+          <el-table-column label="案例" min-width="220" show-overflow-tooltip><template #default="{ row: item }"><div class="case-id-cell">{{ item.caseName || item.caseId }}</div><div class="case-id-sub">{{ item.caseId }}</div></template></el-table-column>
+          <el-table-column label="事件抽取" min-width="150"><template #default="{ row: item }"><el-tag size="small" :type="statusType(item.eventStatus)">{{ stageStatusText(item.eventStatus) }}</el-tag><span v-if="item.eventCount!=null" class="case-count">{{ item.eventCount }} 个事件</span><span v-else-if="item.eventStatus==='SKIPPED'" class="case-count">本次任务不执行</span></template></el-table-column>
+          <el-table-column label="关系抽取" min-width="150"><template #default="{ row: item }"><el-tag size="small" :type="statusType(item.relationshipStatus)">{{ stageStatusText(item.relationshipStatus) }}</el-tag><span v-if="item.relationshipCount!=null" class="case-count">{{ item.relationshipCount }} 条关系</span><span v-else-if="item.relationshipStatus==='SKIPPED'" class="case-count">本次任务不执行</span></template></el-table-column>
+          <el-table-column label="案例入库" min-width="130"><template #default="{ row: item }"><el-tag size="small" :type="statusType(item.databaseStatus)">{{ stageStatusText(item.databaseStatus) }}</el-tag></template></el-table-column>
+          <el-table-column label="自动入图" min-width="130"><template #default="{ row: item }"><el-tag size="small" :type="statusType(item.graphStatus)">{{ stageStatusText(item.graphStatus) }}</el-tag></template></el-table-column>
         </el-table>
-      </template>
-      <template #footer>
-        <el-button v-if="currentJob?.status==='FAILED'" type="primary" @click="retryJob(currentJob);taskDetailVisible=false">重试上传任务</el-button>
-        <el-button @click="taskDetailVisible=false">关闭</el-button>
-      </template>
+      </section>
+      <el-alert v-if="currentJob?.errorMessage" class="job-failure" type="error" show-icon :closable="false" :title="'失败原因：' + currentJob.errorMessage" />
+      <template v-if="currentJob?.failureHistory?.length"><h4 class="failure-history-title">失败与重试记录</h4><el-table :data="currentJob.failureHistory" size="small" border><el-table-column label="失败时间" width="170"><template #default="{row}">{{ formatDateTime(row.failedAt) }}</template></el-table-column><el-table-column prop="failedStepName" label="失败阶段" width="160" /><el-table-column prop="errorMessage" label="失败原因" min-width="260" show-overflow-tooltip /><el-table-column label="重试状态" width="170"><template #default="{row}">{{ row.retriedAt ? formatDateTime(row.retriedAt) + ' 已重试' : '尚未重试' }}</template></el-table-column></el-table></template>
+      <template #footer><el-button v-if="currentJob?.status==='FAILED'" type="primary" @click="retryJob(currentJob);taskDetailVisible=false">重试上传任务</el-button><el-button @click="taskDetailVisible=false">关闭</el-button></template>
     </el-dialog>
     <el-dialog v-model="configVisible" title="Worker运行配置" width="1100px">
       <el-alert type="info" :closable="false" title="大模型参数已改为 Worker 源码常量，不再通过此处或环境变量配置。" />
@@ -278,8 +295,8 @@ const config = computed(() => ({
   workerMode: isAntiFraud.value ? 'ANTI_FRAUD' : 'STRUCTURED',
   title: '案例上传',
   subtitle: '上传历史案例或新增案例，并查看入库与自动处理进度',
-  stepCodes: ['VALIDATE','PERSIST','HISTORY_FRAMEWORK'],
-  steps: ['数据校验','案例入库','历史案例抽取并自动入图']
+  stepCodes: ['VALIDATE','HISTORY_FRAMEWORK'],
+  steps: ['上传与数据校验','逐案例抽取、入库与自动入图']
 }))
 const jobs = ref<any[]>([])
 const total = ref(0)
@@ -294,6 +311,7 @@ const scenarioOptions = [
 const page = ref(1)
 const pageSize = ref(10)
 const currentJob = ref<any>(null)
+const expandedStepNames = ref<string[]>([])
 const createVisible = ref(false)
 const createStep = ref(1)
 const taskDetailVisible = ref(false)
@@ -630,12 +648,174 @@ const loadJobs = async () => {
 const loadDetail = async (jobId: string) => {
   const response: any = await getAnalysisJobApi(jobId)
   currentJob.value = response.data
+  const activeStage = timelineStages(currentJob.value).find((stage:any) => stage.status==='RUNNING' || stage.status==='FAILED')
+  expandedStepNames.value = activeStage ? [activeStage.id] : []
   completedCases.value = []
   selectedCaseJobId.value = currentJob.value.jobId
   if (currentJob.value.status === 'SUCCEEDED') {
     const casesResponse:any = await getCasesApi({ pageNum: 1, pageSize: 200, jobId: currentJob.value.jobId })
     completedCases.value = casesResponse.data?.records || []
   }
+}
+const stepResult = (step:any) => {
+  const value = step?.result
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try { return JSON.parse(value) } catch { return null }
+}
+const stepProgress = (step:any) => stepResult(step) || {}
+const isFrameworkStep = (step:any) => ['HISTORY_FRAMEWORK','FRAMEWORK','GRAPH'].includes(String(step?.stepType || '').toUpperCase())
+const caseProgressRows = (step:any) => {
+  const data = stepResult(step)
+  if (Array.isArray(data?.caseProgress)) return data.caseProgress
+  if (!Array.isArray(data?.results)) return []
+  return data.results.map((item:any) => {
+    const framework = item?.extractionResult?.data || item?.frameworkExtraction || {}
+    const hasFramework = Array.isArray(framework.events) || Array.isArray(framework.relationships)
+    const persisted = item?.persisted === true || item?.persisted === 'true'
+    return {
+      caseId: item?.caseId || item?.caseName || '—',
+      caseName: item?.caseName || item?.caseId || '—',
+      eventCount: Array.isArray(framework.events) ? framework.events.length : 0,
+      relationshipCount: Array.isArray(framework.relationships) ? framework.relationships.length : 0,
+      eventStatus: hasFramework ? 'SUCCEEDED' : 'SKIPPED',
+      relationshipStatus: hasFramework ? 'SUCCEEDED' : 'SKIPPED',
+      databaseStatus: persisted ? 'SUCCEEDED' : 'PENDING',
+      graphStatus: item?.graphSnapshot ? (persisted ? 'SUCCEEDED' : 'PENDING') : 'SKIPPED'
+    }
+  })
+}
+const allJobCaseRows = (job:any) => (job?.steps || []).flatMap((step:any) => caseProgressRows(step))
+const caseTotalAcrossJob = (job:any) => allJobCaseRows(job).length
+const jobCaseRows = (job:any) => {
+  const rows = allJobCaseRows(job)
+  const unique = new Map<string,any>()
+  rows.forEach((row:any) => unique.set(String(row.caseId || row.caseName || unique.size), { ...unique.get(String(row.caseId || row.caseName || unique.size)), ...row }))
+  return [...unique.values()]
+}
+const jobRecognitionMode = (job:any) => String(job?.recognitionMode || (job?.steps || []).map((step:any) => stepResult(step)?.recognitionMode).find(Boolean) || '').toUpperCase()
+const findJobStep = (job:any, matcher:(step:any)=>boolean) => (job?.steps || []).find((step:any) => matcher(step))
+const aggregateCaseStage = (rows:any[], key:string, fallback='PENDING') => {
+  const values = rows.map((row:any) => String(row?.[key] || '').toUpperCase()).filter(Boolean)
+  if (!values.length) return fallback
+  if (values.includes('FAILED')) return 'FAILED'
+  if (values.includes('RUNNING')) return 'RUNNING'
+  if (values.includes('PENDING')) return 'PENDING'
+  return values.every((value:string) => value==='SKIPPED') ? 'SKIPPED' : 'SUCCEEDED'
+}
+const timelineStages = (job:any) => {
+  const rows = jobCaseRows(job)
+  const validation = findJobStep(job, (step:any) => String(step.stepType || '').toUpperCase()==='VALIDATE' || String(step.stepName || '').includes('校验'))
+  const persistence = findJobStep(job, (step:any) => String(step.stepName || '').includes('入库') && !isFrameworkStep(step))
+  const framework = findJobStep(job, (step:any) => isFrameworkStep(step) || String(step.stepName || '').includes('逐案例抽取') || String(step.stepName || '').includes('历史案例抽取'))
+  const mode = jobRecognitionMode(job)
+  const progress = stepProgress(framework)
+  const currentStage = String(progress.currentStage || '')
+  const currentStatus = String(progress.currentStageStatus || '').toUpperCase()
+  const stageFallback = (id:string) => {
+    if (job?.status==='FAILED' && framework?.status==='FAILED') return 'FAILED'
+    if (job?.status==='SUCCEEDED') return mode==='NEW' && ['event','relationship','graph'].includes(id) ? 'SKIPPED' : 'SUCCEEDED'
+    const order:Record<string,number> = { event:1, relationship:2, database:3, graph:4 }
+    const current:Record<string,string> = { '06_event_extraction':'event', '07_relationship_extraction':'relationship', PERSISTENCE:'database', PERSISTED:'graph', GRAPH_WRITE:'graph' }
+    const activeId = current[currentStage]
+    if (activeId && order[id] < order[activeId]) return 'SUCCEEDED'
+    if (activeId===id) return currentStatus || 'RUNNING'
+    return framework?.status==='FAILED' ? 'FAILED' : framework?.status==='PENDING' ? 'PENDING' : 'PENDING'
+  }
+  const inferredStatus = (id:string,key:string) => {
+    if (id==='event' || id==='relationship') {
+      if (mode==='NEW') return 'SKIPPED'
+      return aggregateCaseStage(rows,key,stageFallback(id))
+    }
+    if (id==='graph' && mode==='NEW') return aggregateCaseStage(rows,key,'SKIPPED')
+    const fallback = id==='database' ? (persistence?.status || stageFallback(id)) : stageFallback(id)
+    return aggregateCaseStage(rows,key,fallback)
+  }
+  const progressFor = (status:string, stageRows:any[], key:string, sourceStep:any) => {
+    if (sourceStep) return Number(sourceStep.progress || 0)
+    if (status==='SUCCEEDED' || status==='SKIPPED') return 100
+    if (status==='RUNNING' && stageRows.length) return Math.round(stageRows.filter((row:any) => String(row?.[key] || '').toUpperCase()==='SUCCEEDED').length / stageRows.length * 100)
+    return 0
+  }
+  const stage = (id:string,name:string,status:string,options:any={}) => {
+    const stageRows = options.rows || []
+    const sourceStep = options.sourceStep || null
+    let timeLabel = options.timeLabel || (sourceStep ? stepTimeLabel(sourceStep) : '执行时间未单独记录')
+    if (status==='SKIPPED') timeLabel='本任务不执行'
+    else if (status==='RUNNING' && options.activeCase) timeLabel=`进行中 · 第 ${options.activeCase.caseIndex || '—'} / ${options.activeCase.caseTotal || rows.length || '—'} 个案例`
+    return { id,name,status,rows:stageRows,statusKey:options.statusKey || '',countKey:options.countKey || '',countLabel:options.countLabel || '数量',sourceStep,dataStep:options.dataStep || sourceStep,timeLabel,detail:options.detail || '',progress:progressFor(status,stageRows,options.statusKey,sourceStep) }
+  }
+  const phaseStatus = (id:string,key:string) => inferredStatus(id,key)
+  const historical = mode==='HISTORICAL' || (!mode && Boolean(framework))
+  const activeCase = progress.currentCase || null
+  return [
+    stage('receive','文件接收与安全检查',job?.sourceFileName || job?.createdAt ? 'SUCCEEDED' : 'PENDING',{ detail:'上传接口已接收文件，并执行文件类型、大小等上传限制校验；安全扫描结果没有单独记录。',timeLabel:job?.createdAt ? `上传任务创建于 ${stepTimeLabel({startedAt:job.createdAt})}` : '上传时间未记录' }),
+    stage('parse','文件解析与字段映射',validation?.status || (job?.status==='SUCCEEDED' ? 'SUCCEEDED' : 'PENDING'),{ sourceStep:null,detail:'文件解析与字段映射随上传校验流程完成；系统没有单独保存本阶段的起止时间。',timeLabel:validation ? '状态随数据校验记录 · 耗时未单独记录' : '未单独记录阶段状态' }),
+    stage('validate','数据校验',validation?.status || 'PENDING',{ sourceStep:validation,detail:validation ? '展示上传任务保存的数据校验状态与校验结果。' : '该任务没有独立的数据校验记录。' }),
+    stage('database','案例入库',phaseStatus('database','databaseStatus'),{ sourceStep:persistence,rows,statusKey:'databaseStatus',detail:'按逐案例入库状态汇总；展开后可查看每个案例的入库状态。' }),
+    stage('event','事件抽取',phaseStatus('event','eventStatus'),{ rows,statusKey:'eventStatus',countKey:'eventCount',countLabel:'事件数',dataStep:framework,activeCase:currentStage==='06_event_extraction' ? activeCase : null,detail:historical ? '按逐案例事件抽取进度汇总；展开可查看每个案例的事件数量与状态。' : '新增案例任务按业务流程跳过历史事件抽取。' }),
+    stage('relationship','关系抽取',phaseStatus('relationship','relationshipStatus'),{ rows,statusKey:'relationshipStatus',countKey:'relationshipCount',countLabel:'关系数',dataStep:framework,activeCase:currentStage==='07_relationship_extraction' ? activeCase : null,detail:historical ? '按逐案例关系抽取进度汇总；展开可查看每个案例的关系数量与状态。' : '新增案例任务按业务流程跳过历史关系抽取。' }),
+    stage('graph','自动入图',phaseStatus('graph','graphStatus'),{ rows,statusKey:'graphStatus',dataStep:framework,activeCase:['GRAPH_WRITE','PERSISTED'].includes(currentStage) ? activeCase : null,detail:'按逐案例图谱写入状态汇总；展开可查看每个案例的入图结果。' })
+  ]
+}
+const timelineProgressHint = (job:any) => {
+  const stages = timelineStages(job)
+  const running = stages.find((item:any) => item.status==='RUNNING')
+  if (running) return `当前：${running.name} · ${stages.filter((item:any) => item.status==='SUCCEEDED' || item.status==='SKIPPED').length}/${stages.length} 个阶段已完成`
+  return `${stages.filter((item:any) => item.status==='SUCCEEDED' || item.status==='SKIPPED').length}/${stages.length} 个阶段已完成`
+}
+const processingModeText = (job:any) => job?.processingMode==='BATCH' ? '批量上传' : job?.processingMode==='SINGLE' ? '单案例上传' : '—'
+const sourceFileName = (job:any) => job?.sourceFileName || job?.batchNo || (job?.batchId ? `批次 #${job.batchId}` : '案例文件')
+const fileExtension = (job:any) => {
+  const name = String(job?.sourceFileName || '')
+  const extension = name.includes('.') ? name.split('.').pop()?.toUpperCase() : ''
+  return extension && extension.length <= 5 ? extension : '文'
+}
+const timelineMarker = (status:string) => status==='SUCCEEDED' ? '✓' : status==='RUNNING' ? '···' : status==='FAILED' ? '!' : '·'
+const stepTimeLabel = (step:any) => {
+  const clock = (value:any) => {
+    if (!value) return ''
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? String(value).replace('T',' ').slice(-8) : parsed.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})
+  }
+  const start = clock(step?.startedAt)
+  const end = clock(step?.completedAt)
+  if (!start) return step?.status==='PENDING' ? '等待执行' : '时间未记录'
+  if (!end) return `${start} · 进行中`
+  const startMs = new Date(step.startedAt).getTime()
+  const endMs = new Date(step.completedAt).getTime()
+  const duration = Number.isFinite(startMs) && Number.isFinite(endMs) ? Math.max(0, Math.round((endMs-startMs)/1000)) : null
+  return `${start} — ${end}${duration!==null ? ` · ${duration} 秒` : ''}`
+}
+const stageResultCount = (job:any, key:string, status:string) => jobCaseRows(job).filter((row:any) => String(row?.[key] || '').toUpperCase()===status).length
+const resultReadCount = (job:any) => jobCaseRows(job).length || Number(job?.caseCount || 0)
+const skippedCaseCount = (job:any) => jobCaseRows(job).filter((row:any) => String(row?.databaseStatus || '').toUpperCase()==='SKIPPED').length
+const failedCaseCount = (job:any) => jobCaseRows(job).filter((row:any) => ['eventStatus','relationshipStatus','databaseStatus','graphStatus'].some((key:string) => String(row?.[key] || '').toUpperCase()==='FAILED')).length
+const caseStageSummary = (job:any) => {
+  const total = jobCaseRows(job).length
+  return `事件抽取 ${stageResultCount(job,'eventStatus','SUCCEEDED')}/${total} · 关系抽取 ${stageResultCount(job,'relationshipStatus','SUCCEEDED')}/${total} · 自动入图 ${stageResultCount(job,'graphStatus','SUCCEEDED')}/${total}`
+}
+const stageName = (stage:string) => ({
+  '06_event_extraction':'事件抽取',
+  '07_relationship_extraction':'关系抽取',
+  PERSISTENCE:'案例入库与图谱写入',
+  GRAPH_WRITE:'图谱写入',
+  PERSISTED:'案例入库与图谱写入'
+} as Record<string,string>)[stage] || stage || '等待阶段信息'
+const stageStatusText = (status:string) => ({
+  SUCCEEDED:'已完成', RUNNING:'处理中', FAILED:'失败', PENDING:'待处理',
+  SKIPPED:'已跳过', CANCELLED:'已取消'
+} as Record<string,string>)[String(status || '').toUpperCase()] || '等待数据'
+const stepSummaryEntries = (step:any) => {
+  const data = stepResult(step)
+  if (!data || typeof data !== 'object') return []
+  const labels:Record<string,string> = {
+    stage:'执行阶段', validated:'校验结果', caseCount:'案例数',
+    persistedCaseCount:'已入库案例', completedAt:'完成时间', sourceSha256:'文件摘要'
+  }
+  return Object.entries(data)
+    .filter(([key,value]) => labels[key] && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
+    .map(([key,value]) => ({ label:labels[key], value:key==='validated'?(value?'通过':'未通过'):String(value) }))
 }
 const batchText = (job:any) => job.sourceFileName
   ? `${job.processingMode==='BATCH'?'批处理':'单案例'} · ${job.sourceFileName}`
@@ -785,6 +965,18 @@ onUnmounted(() => pollTimer && window.clearInterval(pollTimer))
 
 <style scoped>
 .job-failure{margin-top:14px}.step-error{display:block;color:#b42318;white-space:normal;word-break:break-word}.failure-history-title{margin:18px 0 10px;color:#334155}
+.trajectory-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 4px 18px;border-bottom:1px solid #e6ebf2}
+.trajectory-header h2{margin:0;color:#263344;font-size:22px;font-weight:650}.trajectory-header p{margin:7px 0 0;color:#77869a;font-size:13px;overflow-wrap:anywhere}.trajectory-header p span{padding:0 5px;color:#aeb8c5}
+.trajectory-status{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:22px;background:#eaf3ff;color:#347fd1;white-space:nowrap;font-size:13px}.trajectory-status i{width:8px;height:8px;border-radius:50%;background:#3986e3}.trajectory-status.status-succeeded{background:#edf8f1;color:#33865b}.trajectory-status.status-succeeded i{background:#42a36c}.trajectory-status.status-failed{background:#fff0f0;color:#c45656}.trajectory-status.status-failed i{background:#d85b5b}
+.upload-progress-card{display:flex;align-items:center;gap:14px;margin:16px 0 18px;padding:16px 18px;border-radius:10px;background:#f5f8fc}.upload-file-icon{display:grid;place-items:center;flex:0 0 42px;height:42px;border-radius:9px;background:#e4effd;color:#347fd1;font-size:12px;font-weight:700}.upload-file-info{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px}.upload-file-info strong{overflow:hidden;color:#28384c;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.upload-file-info>span{overflow:hidden;color:#7b899c;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.upload-file-info :deep(.el-progress){max-width:520px;margin-top:3px}.upload-current-count{display:flex;min-width:200px;flex-direction:column;gap:4px;color:#4384cd;text-align:right;font-size:13px}.upload-current-count strong{font-size:19px;font-weight:650}
+.trajectory-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,.9fr);gap:22px}.trajectory-main{min-width:0}.trajectory-section-heading,.case-progress-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}.trajectory-section-heading strong,.case-progress-heading strong{color:#2e3949;font-size:15px}.trajectory-section-heading>span,.case-progress-heading>span{color:#8996a8;font-size:12px}
+:deep(.job-detail-dialog .el-dialog__body){max-height:calc(100vh - 170px);overflow:auto;padding:12px 22px 16px}
+:deep(.job-detail-dialog .el-dialog__header){height:0;padding:0}
+:deep(.job-detail-dialog .el-dialog__headerbtn){top:17px;right:18px;z-index:3}
+.timeline-collapse{border:0}.timeline-collapse :deep(.el-collapse-item){border:0}.timeline-collapse :deep(.el-collapse-item__header){height:auto;min-height:68px;line-height:1.4;border:0;background:transparent}.timeline-collapse :deep(.el-collapse-item__wrap){border:0}.timeline-collapse :deep(.el-collapse-item__content){padding:0 0 18px}.timeline-step{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr);column-gap:10px}.timeline-marker{position:relative;display:flex;justify-content:center}.timeline-marker span{z-index:1;display:grid;place-items:center;width:27px;height:27px;margin-top:18px;border-radius:50%;background:#e9f6ee;color:#429a69;font-size:14px;font-weight:700}.timeline-marker i{position:absolute;top:42px;bottom:-2px;width:2px;background:#e5ebf2}.timeline-running .timeline-marker span{background:#e8f2ff;color:#3986e3;font-size:11px}.timeline-pending .timeline-marker span{background:#f1f4f8;color:#9aa6b5}.timeline-failed .timeline-marker span{background:#fff0f0;color:#cc5555}.timeline-step-content{width:100%;padding:13px 4px 8px}.timeline-step-heading{display:flex;align-items:center;gap:9px;min-width:0}.timeline-step-heading strong{color:#303b4b;font-size:14px}.timeline-time{margin-left:auto;color:#8794a7;font-size:12px;text-align:right;white-space:nowrap}.timeline-step-expand{margin-top:8px;color:#4388d4;font-size:12px}.timeline-step-expand span{padding-left:5px}.step-drawer-body{padding:2px 4px 0}.step-drawer-meta{display:flex;gap:20px;flex-wrap:wrap;margin:9px 0;color:#78879b;font-size:12px}.step-inline-error{margin-top:10px}.current-case-progress{padding:11px 13px;margin:10px 0;background:#f4f8fd;border-radius:8px}.current-case-heading,.case-progress-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.current-case-heading strong{font-size:13px;color:#303846}.current-case-line{margin-top:7px;color:#536274;font-size:13px;line-height:1.6;overflow-wrap:anywhere}.current-case-line span{padding:0 5px;color:#a0aab7}
+.trajectory-aside{display:flex;flex-direction:column;gap:13px;padding-top:31px}.trajectory-side-card{padding:15px 17px;border-radius:10px;background:#f5f8fc}.trajectory-side-card h3{margin:0 0 12px;color:#303b4a;font-size:15px}.result-line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:12px}.result-line:last-child{border-bottom:0}.result-line span{color:#7c8b9f}.result-line strong{max-width:65%;color:#344255;text-align:right;font-size:13px;font-weight:600;overflow-wrap:anywhere}.trajectory-tip{padding:13px 15px;border-left:4px solid #429b69;border-radius:0 8px 8px 0;background:#eff8f2;color:#476b56;font-size:12px;line-height:1.7}.trajectory-tip.tip-failed{border-left-color:#cc5555;background:#fff3f3;color:#985050}
+.trajectory-case-progress{margin-top:12px;padding-top:15px;border-top:1px solid #e4eaf1}.case-progress-heading{margin-bottom:10px}.case-id-cell{font-weight:500;color:#303846;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.case-id-sub,.case-count{display:block;margin-top:3px;color:#8b97a7;font-size:11px;overflow-wrap:anywhere}.step-result-summary{margin-top:12px}
+@media(max-width:900px){.trajectory-layout{grid-template-columns:1fr}.trajectory-aside{padding-top:0;display:grid;grid-template-columns:1fr 1fr}.trajectory-tip{grid-column:1/-1}.upload-current-count{min-width:140px}.timeline-time{white-space:normal}}
 .config-value { min-width: 420px; }
 .upload-tip { color: #909399; margin-left: 10px; font-size: 12px; }
 .batch-hint { color:#909399; font-size:12px; line-height:1.5; margin-top:6px; }

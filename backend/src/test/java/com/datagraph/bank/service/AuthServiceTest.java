@@ -60,7 +60,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void loginReturnsCurrentUploadAndProcessingMenuPaths() {
+    void loginReturnsCurrentUploadProcessingAndIndicatorMenuPaths() {
         SysUserMapper userMapper = mock(SysUserMapper.class);
         SysRoleMapper roleMapper = mock(SysRoleMapper.class);
         SysMenuMapper menuMapper = mock(SysMenuMapper.class);
@@ -87,6 +87,8 @@ class AuthServiceTest {
                 menu(61L, 0L, "/case", 3),
                 menu(62L, 61L, "/case/processing", 2),
                 menu(63L, 62L, "/case/processing/report", 1),
+                menu(90L, 0L, "/system", 99),
+                menu(94L, 90L, "/system/indicators", 4),
                 menu(99L, 0L, "/retired/path", 99)));
 
         LoginRequest request = new LoginRequest();
@@ -98,6 +100,7 @@ class AuthServiceTest {
         assertTrue(paths.contains("/analysis/upload"));
         assertTrue(paths.contains("/case/processing"));
         assertTrue(paths.contains("/case/processing/report"));
+        assertTrue(paths.contains("/system/indicators"));
         assertTrue(!paths.contains("/retired/path"));
     }
 

@@ -2,6 +2,7 @@ package com.datagraph.bank.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -429,9 +431,18 @@ public class AnalysisWorkerService {
                 while ((line = reader.readLine()) != null) {
                     if (line.isBlank()) continue;
                     JsonNode message = objectMapper.readTree(line);
-                    if ("CASE_COMPLETED".equals(message.path("type").asText()) && job != null) {
+                    if ("CASE_STAGE".equals(message.path("type").asText()) && job != null) {
                         try {
-                            persistXiAnStructuredCase(job, message.path("case"));
+                            updateStructuredCaseStage(job, message);
+                        } catch (Exception ex) {
+                            persistenceErrors.add(truncate(ex.getMessage(), 500));
+                        }
+                    } else if ("CASE_COMPLETED".equals(message.path("type").asText()) && job != null) {
+                        try {
+                            JsonNode caseResult = message.path("case");
+                            updateStructuredCasePersistence(job, caseResult, "RUNNING", null);
+                            persistXiAnStructuredCase(job, caseResult);
+                            updateStructuredCasePersistence(job, caseResult, "SUCCEEDED", null);
                             int total = Math.max(1, message.path("total").asInt(1));
                             int completed = Math.min(total, message.path("completed").asInt(0));
                             int progress = Math.max(25, Math.min(99, completed * 100 / total));
@@ -440,6 +451,12 @@ public class AnalysisWorkerService {
                             jdbc.update("UPDATE analysis_job SET progress=GREATEST(progress,?) WHERE job_id=?",
                                     progress, job.get("job_id"));
                         } catch (Exception ex) {
+                            try {
+                                updateStructuredCasePersistence(job, message.path("case"), "FAILED",
+                                        truncate(ex.getMessage(), 500));
+                            } catch (Exception ignored) {
+                                // Preserve the original case persistence error.
+                            }
                             persistenceErrors.add(truncate(ex.getMessage(), 500));
                         }
                     } else {
@@ -473,6 +490,125 @@ public class AnalysisWorkerService {
             throw new IllegalStateException("结构化案例识别执行失败：" + truncate(errorText, 900));
         }
         return response;
+    }
+
+    private void updateStructuredCaseStage(Map<String, Object> job, JsonNode message) throws Exception {
+        String jobId = String.valueOf(job.get("job_id"));
+        String caseId = message.path("caseId").asText("").trim();
+        if (caseId.isBlank()) return;
+        ObjectNode progress = readRunningStructuredProgress(jobId);
+        if (progress == null) return;
+        ObjectNode item = findOrCreateCaseProgress(progress, caseId);
+        item.put("caseId", caseId);
+        item.put("caseName", message.path("caseName").asText(caseId));
+        item.put("caseIndex", message.path("caseIndex").asInt(0));
+        item.put("caseTotal", message.path("caseTotal").asInt(0));
+        item.put("eventCount", message.path("eventCount").asInt(0));
+        item.put("relationshipCount", message.path("relationshipCount").asInt(0));
+        item.put("updatedAt", Instant.now().toString());
+        String stage = message.path("stage").asText("");
+        String status = message.path("status").asText("");
+        if ("06_event_extraction".equals(stage)) item.put("eventStatus", status);
+        if ("07_relationship_extraction".equals(stage)) item.put("relationshipStatus", status);
+        progress.put("caseTotal", message.path("caseTotal").asInt(0));
+        progress.put("currentStage", stage);
+        progress.put("currentStageStatus", status);
+        progress.set("currentCase", item.deepCopy());
+        persistRunningStructuredProgress(jobId, progress);
+    }
+
+    private void updateStructuredCasePersistence(
+            Map<String, Object> job, JsonNode caseResult, String status, String error) throws Exception {
+        String jobId = String.valueOf(job.get("job_id"));
+        String caseId = caseResult.path("caseId").asText("").trim();
+        if (caseId.isBlank()) return;
+        ObjectNode progress = readRunningStructuredProgress(jobId);
+        if (progress == null) return;
+        ObjectNode item = findOrCreateCaseProgress(progress, caseId);
+        JsonNode framework = caseResult.path("extractionResult").path("data");
+        if (!framework.isObject()) framework = caseResult.path("frameworkExtraction");
+        boolean hasFramework = framework.isObject();
+        item.put("caseId", caseId);
+        item.put("caseName", caseResult.path("caseName").asText(caseId));
+        item.put("eventCount", hasFramework ? framework.path("events").size() : 0);
+        item.put("relationshipCount", hasFramework ? framework.path("relationships").size() : 0);
+        item.put("eventStatus", hasFramework ? "SUCCEEDED" : "SKIPPED");
+        item.put("relationshipStatus", hasFramework ? "SUCCEEDED" : "SKIPPED");
+        String previousDatabaseStatus = item.path("databaseStatus").asText("");
+        if ("GRAPH_RUNNING".equals(status)) {
+            item.put("databaseStatus", "SUCCEEDED");
+            item.put("graphStatus", "RUNNING");
+        } else if ("RUNNING".equals(status)) {
+            item.put("databaseStatus", "RUNNING");
+            item.put("graphStatus", caseResult.path("graphSnapshot").isObject() ? "PENDING" : "SKIPPED");
+        } else if ("FAILED".equals(status)) {
+            item.put("databaseStatus", "SUCCEEDED".equals(previousDatabaseStatus) ? "SUCCEEDED" : "FAILED");
+            item.put("graphStatus", caseResult.path("graphSnapshot").isObject()
+                    ? "FAILED" : "SKIPPED");
+        } else {
+            item.put("databaseStatus", "SUCCEEDED");
+            item.put("graphStatus", caseResult.path("graphSnapshot").isObject() ? "SUCCEEDED" : "SKIPPED");
+        }
+        item.put("caseIndex", item.path("caseIndex").asInt(0));
+        item.put("caseTotal", item.path("caseTotal").asInt(progress.path("caseTotal").asInt(0)));
+        item.put("updatedAt", Instant.now().toString());
+        if (error == null || error.isBlank()) item.remove("errorMessage");
+        else item.put("errorMessage", error);
+        progress.put("currentStage", "GRAPH_RUNNING".equals(status) ? "GRAPH_WRITE"
+                : "SUCCEEDED".equals(status) ? "PERSISTED"
+                : "FAILED".equals(status) && "SUCCEEDED".equals(previousDatabaseStatus)
+                        ? "GRAPH_WRITE" : "PERSISTENCE");
+        progress.put("currentStageStatus", "GRAPH_RUNNING".equals(status) ? "RUNNING"
+                : "SUCCEEDED".equals(status) ? "SUCCEEDED"
+                : "FAILED".equals(status) ? "FAILED" : "RUNNING");
+        progress.set("currentCase", item.deepCopy());
+        persistRunningStructuredProgress(jobId, progress);
+    }
+
+    private ObjectNode readRunningStructuredProgress(String jobId) throws Exception {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT step_order AS "stepOrder", result_json::text AS result
+                FROM analysis_job_step
+                WHERE job_id=? AND status='RUNNING'
+                ORDER BY step_order DESC LIMIT 1
+                """, jobId);
+        if (rows.isEmpty()) return null;
+        String value = Objects.toString(rows.get(0).get("result"), "").trim();
+        if (!value.isBlank()) {
+            JsonNode parsed = objectMapper.readTree(value);
+            if (parsed.isObject()) {
+                ObjectNode progress = (ObjectNode) parsed;
+                if (!progress.path("caseProgress").isArray()) progress.set("caseProgress", objectMapper.createArrayNode());
+                return progress;
+            }
+        }
+        ObjectNode progress = objectMapper.createObjectNode();
+        progress.set("caseProgress", objectMapper.createArrayNode());
+        return progress;
+    }
+
+    private ObjectNode findOrCreateCaseProgress(ObjectNode progress, String caseId) {
+        ArrayNode cases = (ArrayNode) progress.withArray("caseProgress");
+        for (JsonNode item : cases) {
+            if (caseId.equals(item.path("caseId").asText())) return (ObjectNode) item;
+        }
+        ObjectNode item = objectMapper.createObjectNode();
+        item.put("caseId", caseId);
+        cases.add(item);
+        return item;
+    }
+
+    private void persistRunningStructuredProgress(String jobId, ObjectNode progress) throws Exception {
+        List<Integer> orders = jdbc.queryForList("""
+                SELECT step_order FROM analysis_job_step
+                WHERE job_id=? AND status='RUNNING'
+                ORDER BY step_order DESC LIMIT 1
+                """, Integer.class, jobId);
+        if (orders.isEmpty()) return;
+        jdbc.update("""
+                UPDATE analysis_job_step SET result_json=CAST(? AS JSONB)
+                WHERE job_id=? AND step_order=? AND status='RUNNING'
+                """, objectMapper.writeValueAsString(progress), jobId, orders.get(0));
     }
 
     boolean persistXiAnStructuredCase(Map<String, Object> job, JsonNode result) throws Exception {
@@ -621,6 +757,7 @@ public class AnalysisWorkerService {
                 objectMapper.writeValueAsString(result.path("suspiciousReport")), frameworkJson,
                 objectMapper.writeValueAsString(snapshot), riskLevel, caseStatus);
         recordCaseJobRelation(caseId, job);
+        updateStructuredCasePersistence(job, result, "GRAPH_RUNNING", null);
         tuGraphWriter.writeFrameworkCase(caseId, bank,
                 ((Number) job.get("workspace_id")).longValue(), framework);
         return true;

@@ -452,18 +452,40 @@ def _extract_case(
     record: dict[str, Any],
     text_result: dict[str, Any],
     index: int,
+    total: int,
     run_root: Path,
+    case_progress: Any = None,
 ) -> tuple[dict[str, Any], Path]:
-    case_id, _ = _case_identity(record, index)
+    case_id, case_name = _case_identity(record, index)
     run_dir = run_root / f"{index:04d}_{_safe_name(case_id)}"
+
+    def report_progress(stage: str, status: str, state: dict[str, Any]) -> None:
+        if case_progress is None:
+            return
+        case_progress({
+            "caseIndex": index,
+            "caseTotal": total,
+            "caseId": case_id,
+            "caseName": case_name,
+            "stage": stage,
+            "status": status,
+            "eventCount": len(state.get("events") or []),
+            "relationshipCount": len(state.get("relationships") or []),
+        })
+
     final_case, output_dir = workflow.run(
         _workflow_input(record, text_result["analysisTexts"], index),
         run_dir=run_dir,
+        on_progress=report_progress,
     )
     return final_case.model_dump(mode="json"), output_dir / "final_case.json"
 
 
-def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[str, Any]:
+def run_pipeline(
+    request: dict[str, Any],
+    case_completed: Any = None,
+    case_progress: Any = None,
+) -> dict[str, Any]:
     pipeline_started = perf_counter()
     budget_seconds = max(
         60.0,
@@ -604,7 +626,8 @@ def run_pipeline(request: dict[str, Any], case_completed: Any = None) -> dict[st
             check_budget("框架抽取")
             extraction_started = perf_counter()
             framework, final_path = _extract_case(
-                workflow, record, text_result, index, run_root / "extraction"
+                workflow, record, text_result, index, len(records),
+                run_root / "extraction", case_progress,
             )
             extraction_seconds = perf_counter() - extraction_started
             item = {
@@ -805,8 +828,21 @@ def main() -> int:
             sys.stdout.write("\n")
             sys.stdout.flush()
 
+        def emit_case_progress(progress: dict[str, Any]) -> None:
+            json.dump(
+                {"type": "CASE_STAGE", **progress},
+                sys.stdout,
+                ensure_ascii=False,
+            )
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
         json.dump(
-            run_pipeline(request, emit_case if request.get("streamResults") else None),
+            run_pipeline(
+                request,
+                emit_case if request.get("streamResults") else None,
+                emit_case_progress if request.get("streamResults") else None,
+            ),
             sys.stdout,
             ensure_ascii=False,
         )

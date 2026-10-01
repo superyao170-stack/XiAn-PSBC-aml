@@ -71,7 +71,7 @@ graph:
     host: ${TUGRAPH_HOST:localhost}
     port: ${TUGRAPH_PORT:7687}
     username: ${TUGRAPH_USERNAME:admin}
-    password: ${TUGRAPH_PASSWORD:tugraph@123}
+    password: ${TUGRAPH_PASSWORD:73@TuGraph}
   janusgraph:
     host: ${JANUSGRAPH_HOST:localhost}
     port: ${JANUSGRAPH_PORT:8182}

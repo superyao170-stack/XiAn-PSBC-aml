@@ -83,7 +83,8 @@ public class CaseController {
             @RequestParam(required = false) String recognitionMode,
             @RequestParam(required = false) String bankCode,
             @RequestParam(required = false) String jobId,
-            @RequestParam(required = false) String scenarioCode) {
+            @RequestParam(required = false) String scenarioCode,
+            @RequestParam(defaultValue = "false") boolean hasGraph) {
         int safePage = Math.max(pageNum, 1);
         int safeSize = Math.min(Math.max(pageSize, 1), 200);
         Page<CfRiskCase> page = new Page<>(safePage, safeSize);
@@ -138,6 +139,12 @@ public class CaseController {
             }
             wrapper.inSql(CfRiskCase::getCaseId,
                     "SELECT case_id FROM case_analysis_job_rel WHERE job_id='" + safeJobId + "'");
+        }
+        if (hasGraph) {
+            wrapper.inSql(CfRiskCase::getCaseId, """
+                    SELECT DISTINCT case_id FROM graph_snapshot
+                    WHERE status='COMPLETED' AND node_count > 0
+                    """);
         }
         caseMapper.selectPage(page, wrapper);
         enrichCases(page.getRecords());
@@ -502,10 +509,30 @@ public class CaseController {
             rows = jdbcTemplate.queryForList("""
                 SELECT s.job_id AS "workflowId", j.status AS "workflowStatus", NULL AS "currentStep",
                        s.step_order AS "stepOrder", s.step_name AS "stepName",
-                       NULL AS assignee, s.status, s.result_json::text AS "result",
+                       NULL AS assignee, s.status,
+                       CASE WHEN s.status='FAILED' THEN left(s.result_json::text,1000)
+                            ELSE NULL END AS "result",
                        NULL AS opinion, s.started_at AS "startedAt", s.completed_at AS "completedAt"
                 FROM analysis_job_step s
-                JOIN analysis_job j ON j.job_id = s.job_id
+                JOIN analysis_job j ON j.job_id=s.job_id
+                WHERE j.job_id IN (
+                    SELECT rel.job_id FROM case_analysis_job_rel rel WHERE rel.case_id=?
+                    UNION
+                    SELECT p.job_id FROM case_processing_pool p WHERE p.case_id=?
+                )
+                ORDER BY j.created_at DESC, s.step_order
+                """, caseId, caseId);
+        }
+        // Legacy jobs created before the case-to-job relation was recorded.
+        if (rows.isEmpty()) {
+            rows = jdbcTemplate.queryForList("""
+                SELECT s.job_id AS "workflowId", j.status AS "workflowStatus", NULL AS "currentStep",
+                       s.step_order AS "stepOrder", s.step_name AS "stepName",
+                       NULL AS assignee, s.status,
+                       CASE WHEN s.status='FAILED' THEN left(s.result_json::text,1000)
+                            ELSE NULL END AS "result",
+                       NULL AS opinion, s.started_at AS "startedAt", s.completed_at AS "completedAt"
+                FROM analysis_job_step s JOIN analysis_job j ON j.job_id=s.job_id
                 WHERE j.job_id IN (
                     SELECT DISTINCT s2.job_id FROM analysis_job_step s2
                     WHERE s2.result_json::text LIKE ?
@@ -638,15 +665,19 @@ public class CaseController {
     @SuppressWarnings("unchecked")
     Map<String,Object> loadCanonicalStructuredWorkerResult(String caseId) {
         List<Map<String,Object>> rows = jdbcTemplate.queryForList("""
-            SELECT l.recognition_mode AS "recognitionMode",
-                   l.case_document::text AS "caseDocument",
-                   l.updated_at AS "completedAt",
+            SELECT p.recognition_mode AS "recognitionMode",
+                   CASE WHEN l.status='ACTIVE' THEN l.case_document::text
+                        ELSE p.framework_result::text END AS "caseDocument",
+                   COALESCE(l.updated_at,p.updated_at) AS "completedAt",
                    p.job_id AS "jobId",
                    COALESCE(p.suspicious_report,'{}'::jsonb)::text AS "suspiciousReport",
-                   COALESCE(p.graph_snapshot,'{}'::jsonb)::text AS "graphSnapshot"
-              FROM structured_case_library l
-              LEFT JOIN case_processing_pool p ON p.case_id=l.case_id
-             WHERE l.case_id=? AND l.status='ACTIVE'
+                   COALESCE(p.graph_snapshot,'{}'::jsonb)::text AS "graphSnapshot",
+                   COALESCE(p.similarity_result,'{}'::jsonb)::text AS "similarityResult",
+                   p.processing_stage AS "processingStage",
+                   l.status AS "libraryStatus"
+              FROM case_processing_pool p
+              LEFT JOIN structured_case_library l ON l.case_id=p.case_id
+             WHERE p.case_id=?
              LIMIT 1
             """, caseId);
         if (rows.isEmpty()) return null;
@@ -655,7 +686,6 @@ public class CaseController {
         try {
             Map<String,Object> framework = objectMapper.readValue(
                     Objects.toString(stored.get("caseDocument"), "{}"), Map.class);
-            if (framework.isEmpty()) return null;
             String recognitionMode = Objects.toString(
                     stored.get("recognitionMode"), "HISTORICAL").trim().toUpperCase();
 
@@ -680,7 +710,7 @@ public class CaseController {
             Map<String,Object> extraction = new LinkedHashMap<>();
             extraction.put("generated", "NEW".equals(recognitionMode));
             extraction.put("sourceLabel", "NEW".equals(recognitionMode) ? "系统生成" : "历史复用");
-            extraction.put("data", framework);
+            if (!framework.isEmpty()) extraction.put("data", framework);
 
             Map<String,Object> caseResult = new LinkedHashMap<>();
             caseResult.put("caseId", caseId);
@@ -690,10 +720,13 @@ public class CaseController {
             caseResult.put("frameworkExtraction", framework);
             caseResult.put("graphSnapshot", objectMapper.readValue(
                     Objects.toString(stored.get("graphSnapshot"), "{}"), Map.class));
+            Map<String,Object> similarity = objectMapper.readValue(
+                    Objects.toString(stored.get("similarityResult"), "{}"), Map.class);
+            if (!similarity.isEmpty()) caseResult.put("similarityMatch", similarity);
 
             Map<String,Object> worker = new LinkedHashMap<>();
             worker.put("worker", "XI_AN_STRUCTURED_CASE_PIPELINE");
-            worker.put("status", "SUCCEEDED");
+            worker.put("status", framework.isEmpty() ? "PENDING" : "SUCCEEDED");
             worker.put("recognitionMode", recognitionMode);
             worker.put("results", List.of(caseResult));
 
@@ -703,7 +736,9 @@ public class CaseController {
             out.put("jobId", stored.get("jobId"));
             out.put("completedAt", stored.get("completedAt"));
             out.put("jobType", "STRUCTURED");
-            out.put("source", "POSTGRESQL_FINAL_CASE");
+            out.put("processingStage", stored.get("processingStage"));
+            out.put("source", "ACTIVE".equals(stored.get("libraryStatus"))
+                    ? "POSTGRESQL_FINAL_CASE" : "POSTGRESQL_STAGED_CASE");
             out.put("workerResult", worker);
             out.put("raw", framework);
             return out;
@@ -1202,7 +1237,12 @@ public class CaseController {
         List<Object> ids = cases.stream().map(CfRiskCase::getCaseId).map(value -> (Object) value).toList();
         String sql = """
             SELECT c.case_id AS "caseId",
-              (SELECT COUNT(*) FROM cf_risk_event e WHERE e.case_id=c.case_id AND e.deleted=false) AS "eventCount",
+              COALESCE((SELECT jsonb_array_length(p.framework_result->'events')
+                          FROM case_processing_pool p
+                         WHERE p.case_id=c.case_id
+                           AND jsonb_typeof(p.framework_result->'events')='array'),
+                       (SELECT COUNT(*) FROM cf_risk_event e
+                         WHERE e.case_id=c.case_id AND e.deleted=false)) AS "eventCount",
               (SELECT COUNT(*) FROM case_signal_rel r WHERE r.case_id=c.case_id) AS "signalCount",
               (SELECT COUNT(DISTINCT s.source_transaction_id)
                  FROM case_signal_rel r JOIN risk_signal s ON s.signal_id=r.signal_id

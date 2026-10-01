@@ -975,6 +975,7 @@ public class AnalysisController {
                 SELECT job_id AS "jobId", bank_code AS "bankCode", workspace_id AS "workspaceId",
                        batch_id AS "batchId", job_type AS "jobType", job_name AS "jobName", scenario_code AS "scenarioCode",
                        input_params->>'processingMode' AS "processingMode",
+                       input_params->>'recognitionMode' AS "recognitionMode",
                        input_params->>'sourceFileName' AS "sourceFileName",
                        CASE WHEN job_type='UNSTRUCTURED'
                          THEN (SELECT batch_no FROM unstructured_ingest_batch WHERE id=analysis_job.batch_id)

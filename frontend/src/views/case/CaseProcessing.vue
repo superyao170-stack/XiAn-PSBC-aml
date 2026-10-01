@@ -79,7 +79,8 @@
             <el-collapse v-model="frameworkSections"><el-collapse-item v-for="item in extractionSections" :key="item.key" :title="`${item.label}（${item.count}）`" :name="item.key"><JsonPanel :value="item.value" /></el-collapse-item></el-collapse>
           </el-tab-pane>
           <el-tab-pane v-if="detail.similarityResult || detail.similarityRanking?.length" label="相似案例" name="similarity">
-            <el-alert v-if="page.key==='approval'" title="可通过上下移动调整最终顺序；审核通过后顺序和权重会永久写回。" type="info" :closable="false" />
+            <el-alert v-if="orderedMatches.length && page.key==='approval'" title="可通过上下移动调整最终顺序；审核通过后顺序和权重会永久写回。" type="info" :closable="false" />
+            <el-empty v-if="!orderedMatches.length" :description="similarityEmptyMessage" :image-size="72" />
             <div v-for="(item,index) in orderedMatches" :key="matchKey(item,index)" class="match-card" :class="{expanded:isMatchExpanded(item,index)}">
               <div
                 class="match-row"
@@ -186,6 +187,12 @@ const sections=(value:any,labels:any)=>Object.entries(value||{}).filter(([key])=
 const sourceSections=computed(()=>sections(detail.value.sourcePayload,sourceLabels)),extractionSections=computed(()=>sections(detail.value.frameworkResult,extractionLabels))
 const sourceEvents=computed<any[]>(()=>detail.value.sourcePayload?.event_chain||[])
 const riskEventChain=computed<any[]>(()=>detail.value.suspiciousReport?.riskEventChain||[])
+const similarityEmptyMessage=computed(()=>{
+  const result=detail.value.similarityResult
+  const historyCount=Number(result?.rawResult?.history_case_count)
+  if(Number.isFinite(historyCount) && historyCount===0)return '同场景历史案例库暂无已审核通过的案例。请先完成历史案例复核，再执行相似匹配。'
+  return result?.rawResult?.match_summary || '当前案例没有达到匹配条件的历史案例。'
+})
 const riskSourceIndexes=computed(()=>new Set(riskEventChain.value.flatMap((item:any)=>item.source_event_indexes||item.evidence?.map((source:any)=>Number(source.source_index)+1)||[]).map(Number)))
 const isRiskSource=(index:number)=>riskSourceIndexes.value.has(index)
 const riskSourceLabels=(risk:any)=>(risk.source_event_indexes||risk.evidence?.map((item:any)=>Number(item.source_index)+1)||[]).join('、')||'—'
@@ -207,7 +214,7 @@ const commonPoints=(anchor:any)=>anchor.common_description_points||anchor.common
 function eventField(anchor:any,side:'query'|'candidate',field:string){const event=anchor[`${side}_event`]||anchor[`${side}Event`]||{};const camelField=field.replace(/_([a-z])/g,(_,letter)=>letter.toUpperCase());return event[field]??event[camelField]}
 async function load(){loading.value=true;try{const response:any=await getCaseProcessingApi({stage:page.value.stage,pageNum:pageNum.value,pageSize:pageSize.value,caseId:filters.caseId||undefined,scenarioCode:filters.scenarioCode||undefined});records.value=response.data?.records||[];total.value=response.data?.total||0;selected.value=[]}finally{loading.value=false}}
 const search=()=>{pageNum.value=1;load()},reset=()=>{filters.caseId='';filters.scenarioCode='';search()}
-async function runBatch(){processing.value=true;try{const response:any=await processCasesApi(page.value.action,selected.value.map(item=>item.caseId));ElMessage.success(`处理完成：成功 ${response.data?.succeeded||0}，失败 ${response.data?.failed||0}`);await load()}finally{processing.value=false}}
+async function runBatch(){processing.value=true;try{const response:any=await processCasesApi(page.value.action,selected.value.map(item=>item.caseId));const succeeded=response.data?.succeeded||0;const failed=response.data?.failed||0;const firstError=response.data?.results?.find((item:any)=>item.status==='FAILED')?.error;if(failed)ElMessage.error(`处理失败 ${failed} 条${firstError?`：${firstError}`:''}`);else ElMessage.success(`处理完成：成功 ${succeeded} 条`);await load()}finally{processing.value=false}}
 async function openDetail(row:any){detailVisible.value=true;detailLoading.value=true;expandedMatches.value=[];try{const response:any=await getCaseProcessingDetailApi(row.caseId);detail.value=response.data||{};reportText.value=detail.value.suspiciousReport?.analysisText||Object.values(detail.value.suspiciousReport?.analysisTexts||{}).join('\n\n');finalRisk.value=detail.value.recommendedRiskLevel||'';const matches=detail.value.similarityResult?.matches||detail.value.similarityResult?.similarCases||[];const rankMap=new Map((detail.value.similarityRanking||[]).map((item:any)=>[item.caseId,item]));orderedMatches.value=[...matches].map((item:any)=>({...item,...(rankMap.get(item.caseId)||{})})).sort((a:any,b:any)=>(a.finalRank||a.rank||99)-(b.finalRank||b.rank||99));activeTab.value=page.value.key==='framework'?'basic':page.value.key==='similarity'?'framework':page.value.key==='approval'?(detail.value.suspiciousReport?'report':detail.value.frameworkResult?'framework':'basic'):'basic'}finally{detailLoading.value=false}}
 async function saveReport(){savingReport.value=true;try{await updateProcessingReportApi(detail.value.caseId,reportText.value);ElMessage.success('保存成功，案例已进入框架抽取队列，请在框架抽取页面手动开始');detailVisible.value=false;await load()}finally{savingReport.value=false}}
 function move(index:number,delta:number){const target=index+delta;[orderedMatches.value[index],orderedMatches.value[target]]=[orderedMatches.value[target],orderedMatches.value[index]]}

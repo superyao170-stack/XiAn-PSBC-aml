@@ -28,7 +28,8 @@ public class AuthService {
             "/case/processing/framework", "/case/processing/similarity",
             "/case/processing/approval", "/case/graph",
             "/graph", "/graph/visualize", "/graph/hidden-risk", "/graph/association-clues",
-            "/system", "/system/roles", "/system/menus", "/system/event-metadata");
+            "/system", "/system/roles", "/system/menus", "/system/event-metadata",
+            "/system/indicators");
 
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
