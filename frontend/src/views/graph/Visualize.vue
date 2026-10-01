@@ -78,7 +78,7 @@ type GraphPlane = 'EVENT_GRAPH'
 type NodeType = {key:string;label:string;color:string;icon:string;raw:string[];plane:GraphPlane}
 
 const cases=ref<any[]>([]), dateRange=ref<string[]>([]), scenarios=ref<string[]>(['AML','ANTI_FRAUD'])
-const totalApprovedCases=ref(0)
+const totalGraphCases=ref(0)
 const PANORAMA_CASE_LIMIT=50
 const router=useRouter()
 const nodes=ref<any[]>([]), edges=ref<any[]>([]), selected=ref<any>(null), validCaseCount=ref(0), loading=ref(false)
@@ -143,8 +143,8 @@ const filteredCases=computed(()=>cases.value.filter(item=>{
   return !dateRange.value?.length||(date>=dateRange.value[0]&&date<=dateRange.value[1])
 }))
 const summaryText=computed(()=>{
-  const scope=totalApprovedCases.value>cases.value.length
-    ? `${validCaseCount.value}/${totalApprovedCases.value} 个案件已入图（当前展示最近 ${cases.value.length} 个）`
+  const scope=totalGraphCases.value>cases.value.length
+    ? `${validCaseCount.value}/${totalGraphCases.value} 个案件已入图（当前展示最近 ${cases.value.length} 个）`
     : `${validCaseCount.value} 个案件已入图`
   return `${scope}：共 ${displayedNodes.value.length} 个节点、${displayedEdges.value.length} 条关系`
 })
@@ -189,11 +189,12 @@ const toggleType=(key:string)=>{
 async function loadCases(){
   loading.value=true
   try{
-    // Keep the panorama usable instead of starting thousands of simultaneous
-    // case-graph requests. The UI labels the bounded recent-case window.
-    const response:any=await getCasesApi({pageNum:1,pageSize:PANORAMA_CASE_LIMIT,caseStatus:'APPROVED'})
+    // A completed graph snapshot, rather than the workflow status, determines
+    // whether a case belongs in the panorama. This also covers historical cases
+    // that already have graph data but are still awaiting manual approval.
+    const response:any=await getCasesApi({pageNum:1,pageSize:PANORAMA_CASE_LIMIT,hasGraph:true})
     cases.value=response.data?.records||[]
-    totalApprovedCases.value=Number(response.data?.total||0)
+    totalGraphCases.value=Number(response.data?.total||0)
     await loadGraph()
   }catch(error:any){
     ElMessage.error(error.message||'案件列表加载失败')
@@ -205,9 +206,13 @@ async function loadGraph(){
   loading.value=true
   selected.value=null
   try{
+    let failedGraphCount=0
     const graphs=await Promise.all(filteredCases.value.map(async item=>{
       const graphResponse:any=await getCaseGraphApi(item.caseId)
-        .catch(()=>({data:{nodes:[],edges:[],chains:[],multiStageMatter:null}}))
+        .catch(()=>{
+          failedGraphCount+=1
+          return {data:{nodes:[],edges:[],chains:[],multiStageMatter:null}}
+        })
       const presentation=graphResponse.data||{}
       return {
         caseId:item.caseId,
@@ -265,6 +270,9 @@ async function loadGraph(){
     })
     nodes.value=mergedNodes
     edges.value=mergedEdges
+    if(filteredCases.value.length&&failedGraphCount===filteredCases.value.length){
+      ElMessage.error('图谱服务连接失败，请检查图数据库配置')
+    }
   }finally{
     loading.value=false
   }

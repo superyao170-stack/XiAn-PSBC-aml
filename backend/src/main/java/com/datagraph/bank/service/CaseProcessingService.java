@@ -25,6 +25,7 @@ public class CaseProcessingService {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final CaseRiskRatingService riskRating;
+    private final TuGraphStructuredWriter graphWriter;
     private final Path amlRoot;
     private final Path fraudRoot;
     private final String amlPython;
@@ -33,6 +34,7 @@ public class CaseProcessingService {
     private final Map<String,List<String>> historySnapshotCache = new ConcurrentHashMap<>();
 
     public CaseProcessingService(JdbcTemplate jdbc, ObjectMapper json, CaseRiskRatingService riskRating,
+            TuGraphStructuredWriter graphWriter,
             @Value("${worker.structured-case.root:../workers/structured-case-identification}") String amlRoot,
             @Value("${worker.anti-fraud-case.root:../workers/anti-fraud-case-identification}") String fraudRoot,
             @Value("${worker.structured-case.python:}") String amlPython,
@@ -42,6 +44,7 @@ public class CaseProcessingService {
         this.jdbc = jdbc;
         this.json = json;
         this.riskRating = riskRating;
+        this.graphWriter = graphWriter;
         this.amlRoot = resolveRoot(amlRoot, "workers/structured-case-identification");
         this.fraudRoot = resolveRoot(fraudRoot, "workers/anti-fraud-case-identification");
         this.amlPython = WorkerPythonEnvironment.resolve(amlPython, this.amlRoot, fallbackPython);
@@ -188,6 +191,12 @@ public class CaseProcessingService {
         JsonNode snapshot = item.path("graphSnapshot");
         if (!framework.isObject()) throw new IllegalStateException("Worker 未返回框架抽取结果");
         String caseId = String.valueOf(pool.get("case_id"));
+        Long workspaceId = jdbc.queryForObject(
+                "SELECT workspace_id FROM cf_risk_case WHERE case_id=? AND deleted=false",
+                Long.class, caseId);
+        if (workspaceId == null) throw new IllegalStateException("案例缺少工作空间，无法写入图谱");
+        // 图谱写入失败时保持 PENDING_EXTRACTION，允许重试框架抽取。
+        graphWriter.writeFrameworkCase(caseId, String.valueOf(pool.get("bank_code")), workspaceId, framework);
         jdbc.update("""
             UPDATE case_processing_pool SET processing_stage='PENDING_SIMILARITY',framework_result=?::jsonb,
                    graph_snapshot=?::jsonb,similarity_result=NULL,last_error=NULL,stage_completed_at=CURRENT_TIMESTAMP,
@@ -209,6 +218,9 @@ public class CaseProcessingService {
             Path query = runDir.resolve("query.json");
             Files.writeString(query, json.writeValueAsString(framework), StandardCharsets.UTF_8);
             List<String> history = historySnapshot(pool);
+            if (history.isEmpty()) {
+                throw new IllegalStateException("同场景历史案例库暂无已审核通过的案例，请先完成历史案例复核，再重试相似匹配");
+            }
             JsonNode similarity = invokeScript(amlRoot, amlPython, amlRoot.resolve("similarity_matching.py"),
                     Map.of("queryFile", query.toString(), "historyFiles", history, "settings", Map.of()));
             if ("FAILED".equals(similarity.path("status").asText())) throw new IllegalStateException(similarity.path("error").asText());

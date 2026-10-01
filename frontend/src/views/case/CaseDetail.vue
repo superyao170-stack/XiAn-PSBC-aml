@@ -14,7 +14,9 @@
         </el-select>
       </div>
     </Teleport>
-    <el-tabs v-model="activeTab" class="tabs">
+    <el-skeleton v-if="detailLoading" :rows="10" animated />
+    <el-alert v-else-if="detailLoadError" type="error" :closable="false" show-icon :title="detailLoadError" />
+    <el-tabs v-else v-model="activeTab" class="tabs">
       <el-tab-pane label="可疑报告" name="report">
         <el-card class="report-card">
           <template #header>
@@ -357,7 +359,9 @@
               :title="`处理逻辑问题：${consistencyAssessment.processing.join('；')}`" />
             <el-alert v-if="consistencyAssessment.data.length" type="warning" :closable="false" show-icon
               :title="`数据自身问题：${consistencyAssessment.data.join('；')}`" />
-            <el-alert v-if="!consistencyAssessment.processing.length && !consistencyAssessment.data.length" type="success" :closable="false" show-icon
+            <el-alert v-if="workerResult?.status==='PENDING'" type="info" :closable="false" show-icon
+              title="框架抽取尚未完成，一致性校验将在结果生成后进行" />
+            <el-alert v-if="!detailLoading && workerResult?.status!=='PENDING' && !consistencyAssessment.processing.length && !consistencyAssessment.data.length" type="success" :closable="false" show-icon
               title="案例详情、模型页签与图谱快照的有效节点数量一致，未发现数据缺失" />
           </div>
           <el-descriptions :column="2" border class="provenance-list balanced-descriptions">
@@ -366,7 +370,7 @@
             <el-descriptions-item label="事件模型">{{ modelProvenance.event }}</el-descriptions-item>
             <el-descriptions-item label="账户模型">{{ modelProvenance.account }}</el-descriptions-item>
             <el-descriptions-item label="客户模型">{{ modelProvenance.customer }}</el-descriptions-item>
-            <el-descriptions-item label="图谱快照">TuGraph · BankGraph 案例子图</el-descriptions-item>
+            <el-descriptions-item label="图谱校验">TuGraph · BankGraph 原始案例子图</el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-tab-pane>
@@ -463,8 +467,8 @@
       <el-tab-pane label="相似度匹配" name="similarity">
         <el-card class="similarity-card">
           <template #header><div class="report-heading"><div><b>相似度匹配</b><span>{{ similarCases.length }} 条</span></div></div></template>
-          <el-alert :title="similaritySummary" type="success" :closable="false" />
-          <el-table :data="similarCases" empty-text="历史案例库暂无可匹配案例" class="similarity-table">
+          <el-alert :title="similaritySummary" :type="similarCases.length ? 'success' : 'info'" :closable="false" />
+          <el-table :data="similarCases" :empty-text="processingStage==='PENDING_SIMILARITY' ? '相似度匹配尚未完成' : '历史案例库暂无可匹配案例'" class="similarity-table">
             <el-table-column prop="rank" label="排名" width="80" />
             <el-table-column prop="caseId" label="历史案例ID" min-width="190" />
             <el-table-column prop="caseName" label="案例名称" min-width="260" />
@@ -551,6 +555,7 @@ const normalizeDetailTab=(value:any)=>{
   return allowedTabs.has(normalized)?normalized:'overview'
 }
 const activeTab = ref(normalizeDetailTab(route.query.tab)), graphCanvas = ref<InstanceType<typeof G6GraphCanvas>>()
+const detailLoading=ref(true), detailLoadError=ref('')
 const activeOverviewLayers = ref(['case','entity','event','relation','evidence'])
 const caseDetail = ref<any>({}), events = ref<any[]>([]), signals = ref<any[]>([]), history = ref<any[]>([])
 const eventMetadataRows = ref<any[]>([])
@@ -571,7 +576,7 @@ const triggerPointOptions=computed(()=>optionsFor('triggerPoint'))
 const urgencyLevelOptions=computed(()=>optionsFor('urgencyLevel'))
 const businessCaseStatusOptions=computed(()=>optionsFor('businessCaseStatus'))
 const businessRiskLevelOptions=computed(()=>optionsFor('businessRiskLevel'))
-const workerResult = ref<any>(null), rawWorkerResult=ref<any>(null), workerResultSource=ref(''), workerJobId = ref(''), selectedGraphNode=ref<any>(null), selectedGraphEdge=ref<any>(null), rawGraphNodes=ref<any[]>([]), graphNodes = ref<any[]>([]), graphEdges = ref<any[]>([])
+const workerResult = ref<any>(null), rawWorkerResult=ref<any>(null), workerResultSource=ref(''), processingStage=ref(''), workerJobId = ref(''), selectedGraphNode=ref<any>(null), selectedGraphEdge=ref<any>(null), rawGraphNodes=ref<any[]>([]), graphNodes = ref<any[]>([]), graphEdges = ref<any[]>([])
 const cleanCaseName=(value:any)=>String(value||'').trim()
   .replace(/^.*?可疑案例[0-9０-９]+\s*[—–-]+\s*/,'')
   .replace(/^[\s—–-]+/,'')
@@ -609,7 +614,10 @@ const extractionSourceLabel=computed(()=>structuredCaseResult.value?.extractionR
 const similarCases=computed<any[]>(()=>structuredCaseResult.value?.similarityMatch?.matches
   ||structuredCaseResult.value?.caseAnalysis?.similarCases||[])
 const similaritySummary=computed(()=>structuredCaseResult.value?.similarityMatch?.summary
-  ||structuredCaseResult.value?.caseAnalysis?.summary||'当前案例暂无相似度匹配结果')
+  ||structuredCaseResult.value?.caseAnalysis?.summary
+  ||(similarCases.value.length?`已匹配 ${similarCases.value.length} 条历史案例`
+    :processingStage.value==='PENDING_SIMILARITY'?'相似度匹配尚未完成'
+      :'当前案例暂无相似度匹配结果'))
 const matters=ref<any[]>([]),techniques=ref<any[]>([]),reviewSuggestions=ref<any[]>([])
 const reasoning=ref<any>({})
 const coreChain=ref<any>({})
@@ -794,6 +802,7 @@ const structuredFramework=computed<any>(()=>structuredCaseResult.value?.extracti
 const workerCase = computed(() => structuredFramework.value?.basic_info
   ||workerResult.value?.nodes?.cases?.[0]||null)
 const graphByType = (type:string) => graphNodes.value.filter((n:any)=>String(n.properties?.canonicalType || n.properties?.nodeType || n.label || '').toUpperCase()===type).map((n:any)=>({ uid:n.uid||n.id, ...(n.properties||{}), ...n }))
+const rawGraphByType = (type:string) => rawGraphNodes.value.filter((n:any)=>String(n.properties?.canonicalType || n.properties?.nodeType || n.label || '').toUpperCase()===type).map((n:any)=>({ uid:n.uid||n.id, ...(n.properties||{}), ...n }))
 const persistedBusinessId = (item:any) => {
   const direct=item?.businessId||item?.business_id||item?.properties?.businessId
   if(direct)return String(direct)
@@ -951,7 +960,7 @@ const eventDisplayKey=(event:any)=>[
   event?.ended_at||event?.endedAt||event?.event_end_date
 ].map(value=>String(value||'').replace(/\s+/g,'').replace(/[，。；、,.;]+$/g,'')).join('|')
 const eventModels = computed(() => {
-  const source=structuredFramework.value?.events?.length
+  const source=Array.isArray(structuredFramework.value?.events)
     ? structuredFramework.value.events
     : workerResult.value?.nodes?.events?.length ? workerResult.value.nodes.events : events.value
   const unique=new Map<string,any>()
@@ -986,7 +995,7 @@ const evidenceAssociation=(evidence:any)=>{
   }
 }
 const evidenceModels = computed(() => {
-  const source=structuredFramework.value?.evidences?.length ? structuredFramework.value.evidences
+  const source=Array.isArray(structuredFramework.value?.evidences) ? structuredFramework.value.evidences
     : workerResult.value?.nodes?.evidences?.length ? workerResult.value.nodes.evidences
       : (graphByType('EVIDENCE').length ? graphByType('EVIDENCE') : signals.value.map((s:any)=>({uid:s.signalId,businessId:s.businessId,type:s.signalType,name:s.scenarioCode,summary:(s.reasonCodes||[]).join('、')||s.decision,source:s.algorithmId})))
   return source.map((e:any)=>{
@@ -1002,20 +1011,25 @@ const evidenceModels = computed(() => {
   })
 })
 const isStructuredCase = computed(() => /STRUCT/i.test(String(caseDetail.value.caseSource||'')))
-const graphCustomersWithPhysicalIdentity = computed(() => graphByType('CUSTOMER').filter((item:any) =>
-  item.name || item.customer_no || item.customerNo || item.id_number || item.idNumber || item.entity_id || item.entityId))
-const graphCustomersWithoutPhysicalIdentity = computed(() => graphByType('CUSTOMER').filter((item:any) =>
-  !item.name && !item.customer_no && !item.customerNo && !item.id_number && !item.idNumber && !item.entity_id && !item.entityId))
+const hasPhysicalCustomerIdentity = (item:any) => [
+  item.name,item.customer_name,item.customerName,
+  item.customer_no,item.customerNo,item.customer_number,item.customerNumber,
+  item.id_number,item.idNumber
+].some(value=>value!==null&&value!==undefined&&String(value).trim()!=='')
+// 一致性校验使用 TuGraph 原始子图；展示用解释链可能裁剪客户节点。
+const graphCustomersWithPhysicalIdentity = computed(() => rawGraphByType('CUSTOMER').filter(hasPhysicalCustomerIdentity))
+const graphCustomersWithoutPhysicalIdentity = computed(() => rawGraphByType('CUSTOMER').filter((item:any) =>
+  !hasPhysicalCustomerIdentity(item)))
 const generatedCustomerPlaceholders = computed(() => graphCustomersWithoutPhysicalIdentity.value.filter((item:any) =>
   item.accountHash || item.account_hash || /^CUST-CASE-/i.test(String(item.graphId || item.uid || ''))))
 const incompletePhysicalCustomers = computed(() => graphCustomersWithoutPhysicalIdentity.value.filter((item:any) =>
   !generatedCustomerPlaceholders.value.includes(item)))
-const customerModels = computed(() => structuredFramework.value?.customers?.length
+const customerModels = computed(() => Array.isArray(structuredFramework.value?.customers)
   ? structuredFramework.value.customers.map((item:any)=>({...item,businessId:item.entity_id||persistedBusinessId(item)}))
   : workerResult.value?.nodes?.customers?.length
     ? workerResult.value.nodes.customers.map((item:any)=>({...item,businessId:persistedBusinessId(item)}))
   : (isStructuredCase.value ? [] : graphCustomersWithPhysicalIdentity.value.map((item:any)=>({...item,businessId:persistedBusinessId(item)}))))
-const accountModels = computed(() => (structuredFramework.value?.accounts?.length
+const accountModels = computed(() => (Array.isArray(structuredFramework.value?.accounts)
   ? structuredFramework.value.accounts
   : workerResult.value?.nodes?.accounts?.length ? workerResult.value.nodes.accounts : graphByType('ACCOUNT'))
   .map((item:any)=>({...item,businessId:persistedBusinessId(item)})))
@@ -1174,23 +1188,27 @@ const consistencyAssessment = computed(() => {
   const processing:string[]=[]
   const data:string[]=[]
   const declaredEvents=Number(caseDetail.value.eventCount||0)
-  if(declaredEvents!==eventModels.value.length) processing.push(`案例主表事件数${declaredEvents}与事件模型${eventModels.value.length}不同，需同步案例统计字段`)
+  if(analysisLoadErrors.value.worker) processing.push('案例框架结果加载失败，暂无法完成模型一致性校验')
+  if(declaredEvents!==eventModels.value.length) processing.push(`案例统计事件数${declaredEvents}与事件模型${eventModels.value.length}不同，需检查事件统计来源`)
+  if(analysisLoadErrors.value.graph) processing.push('案例图谱加载失败，暂无法完成 TuGraph 一致性校验')
+  else if(!rawGraphNodes.value.length && (eventModels.value.length || accountModels.value.length || customerModels.value.length)) processing.push('TuGraph 原始案例子图为空，需检查图谱写入或查询')
   if(rawGraphNodes.value.length && rawTuGraphCount('EVENT')!==eventModels.value.length) processing.push(`事件模型${eventModels.value.length}个、TuGraph原始子图${rawTuGraphCount('EVENT')}个，需检查Worker事件映射、去重或图谱写入`)
   // 统一解释链会按展示边界裁剪账户，账户一致性必须和 TuGraph 原始案例子图比较。
   if(rawGraphNodes.value.length && rawTuGraphCount('ACCOUNT')!==accountModels.value.length) processing.push(`账户模型${accountModels.value.length}个、TuGraph原始子图${rawTuGraphCount('ACCOUNT')}个，需检查账户映射或图谱写入`)
-  if(graphNodes.value.length && graphCount('EVIDENCE')!==evidenceModels.value.length) processing.push(`证据模型${evidenceModels.value.length}个、统一解释链${graphCount('EVIDENCE')}个，需检查证据归并或解释链投影`)
+  if(graphNodes.value.length && graphCount('EVIDENCE')!==evidenceModels.value.length) processing.push(`证据模型${evidenceModels.value.length}个、案例图谱${graphCount('EVIDENCE')}个，需检查证据归并或图谱写入`)
   // “有效客户”必须使用同一套物理身份过滤口径，不能拿全部占位节点与客户模型比较。
-  if(graphCustomersWithPhysicalIdentity.value.length!==customerModels.value.length) processing.push(`有效客户模型${customerModels.value.length}个、TuGraph有效客户${graphCustomersWithPhysicalIdentity.value.length}个，需检查KYC映射或图谱写入`)
+  if(rawGraphNodes.value.length && graphCustomersWithPhysicalIdentity.value.length!==customerModels.value.length) processing.push(`有效客户模型${customerModels.value.length}个、TuGraph有效客户${graphCustomersWithPhysicalIdentity.value.length}个，需检查KYC映射或图谱写入`)
   if(generatedCustomerPlaceholders.value.length) processing.push(`TuGraph残留${generatedCustomerPlaceholders.value.length}个由账户哈希生成的占位客户节点，应使用当前建图规则重建清理`)
-  if(incompletePhysicalCustomers.value.length) data.push(`源数据中${incompletePhysicalCustomers.value.length}个客户实体缺少姓名、客户号或证件号，已排除且不计入有效客户模型`)
+  if(incompletePhysicalCustomers.value.length) data.push(`TuGraph中${incompletePhysicalCustomers.value.length}个客户实体缺少姓名、客户号或证件号，未计入有效客户数`)
   return {processing,data}
 })
 const isRelationalProjection = computed(() => workerResult.value?.meta?.transformer === 'STRUCTURED_RELATIONAL_PROJECTION')
+const isPostgresFramework = computed(() => workerResultSource.value.startsWith('POSTGRESQL_'))
 const modelProvenance = computed(() => ({
-  evidence:isRelationalProjection.value ? 'PostgreSQL · risk_signal + risk_transaction_materialized' : 'Worker 原始结果 · nodes.evidences',
-  event:isRelationalProjection.value ? 'PostgreSQL · cf_risk_event + evidence_refs' : 'Worker 原始结果 · nodes.events',
-  account:isRelationalProjection.value ? 'PostgreSQL · risk_transaction_materialized 关联账户' : 'Worker 原始结果 · nodes.accounts',
-  customer:customerModels.value.length ? 'Worker/KYC 中具备姓名、客户号或证件号的真实实体' : '未取得客户主数据，不生成账户哈希占位客户'
+  evidence:isRelationalProjection.value ? 'PostgreSQL · risk_signal + risk_transaction_materialized' : isPostgresFramework.value ? 'PostgreSQL · 框架抽取结果 evidences' : 'Worker 原始结果 · nodes.evidences',
+  event:isRelationalProjection.value ? 'PostgreSQL · cf_risk_event + evidence_refs' : isPostgresFramework.value ? 'PostgreSQL · 框架抽取结果 events' : 'Worker 原始结果 · nodes.events',
+  account:isRelationalProjection.value ? 'PostgreSQL · risk_transaction_materialized 关联账户' : isPostgresFramework.value ? 'PostgreSQL · 框架抽取结果 accounts' : 'Worker 原始结果 · nodes.accounts',
+  customer:customerModels.value.length ? '框架抽取/KYC 中具备姓名、客户号或证件号的真实实体' : '未取得客户主数据，不生成账户哈希占位客户'
 }))
 const eventEvidence = (event:any) => {
   const value=event?.evidence_refs ?? event?.evidenceRefs ?? {}
@@ -1320,6 +1338,9 @@ const graphNodeRoleName=(node:any)=>({
 const relationDisplayName=(edge:any)=>String(
   edge?.properties?.relationName
   || edge?.properties?.displayName
+  || edge?.properties?.relationType
+  || edge?.relationType
+  || edge?.type
   || '关联关系'
 )
 const edgeCategoryName=(value:string)=>value==='INFERENCE'?'事理推理关系':value==='FACT'?'事件事实关系':value||'关系'
@@ -1615,12 +1636,16 @@ async function saveCaseOverview(){
     caseOverviewSaving.value=false
   }
 }
+let loadVersion=0
 async function load() {
   const id = String(route.params.caseId || route.params.id || ''); if (!id) return
+  const version=++loadVersion
+  detailLoading.value=true
+  detailLoadError.value=''
   try {
     analysisLoadErrors.value={}
     const optional = (key:string,request: Promise<any>, fallback: any) => request.catch((error:any) => {
-      analysisLoadErrors.value={...analysisLoadErrors.value,[key]:error?.message||'加载失败'}
+      if(version===loadVersion) analysisLoadErrors.value={...analysisLoadErrors.value,[key]:error?.message||'加载失败'}
       return { data: fallback }
     })
     const [c,e,s,w,g,wr,m,t,rs,rr,cc,kc]: any[] = await Promise.all([
@@ -1637,14 +1662,16 @@ async function load() {
       optional('coreChain',getCaseCoreChainApi(id), {}),
       optional('knowledge',getCaseKnowledgeExplanationChainsApi(id), {nodes:[],edges:[],chains:[],multiStageMatter:null})
     ])
+    if(version!==loadVersion)return
     caseDetail.value = c.data || {}; events.value = e.data || []; signals.value = s.data || []
     const eventScenario = caseDetail.value.scenarioCode === 'ANTI_FRAUD' ? 'ANTI_FRAUD' : 'AML'
     const em = await optional('eventMetadata',getEventMetadataApi(eventScenario), {eventTypes:[]})
+    if(version!==loadVersion)return
     selectedTaskCaseId.value=String(caseDetail.value.caseId||id)
     taskCases.value=caseDetail.value.caseId?[caseDetail.value]:[]
     history.value = (w.data || []).map((x:any) => ({ time: formatDateTime(x.completedAt || x.startedAt), title: x.stepName || x.workflowStatus, description: x.opinion || x.result || x.status }))
-    const payload = wr.data || {}; workerJobId.value = payload.jobId || ''; workerResultSource.value=payload.source||payload.jobType||''; workerResult.value = typeof payload.workerResult === 'string' ? JSON.parse(payload.workerResult) : payload.workerResult; rawWorkerResult.value=typeof payload.raw==='string' ? JSON.parse(payload.raw) : (payload.raw||payload.workerResult)
-    // 图谱快照只读取当前核心链；TuGraph 全量案例子图仅在核心链尚未生成时作为边界过滤后的降级数据源。
+    const payload = wr.data || {}; workerJobId.value = payload.jobId || ''; workerResultSource.value=payload.source||payload.jobType||''; processingStage.value=payload.processingStage||''; workerResult.value = typeof payload.workerResult === 'string' ? JSON.parse(payload.workerResult) : payload.workerResult; rawWorkerResult.value=typeof payload.raw==='string' ? JSON.parse(payload.raw) : (payload.raw||payload.workerResult)
+    // 案例图谱展示完整子图；解释链仅用于解释视图，不覆盖原始图谱。
     coreChain.value=cc.data||{}
     knowledgeExplanation.value=kc.data||{nodes:[],edges:[],chains:[],multiStageMatter:null}
     eventMetadataRows.value=em.data?.eventTypes||[]
@@ -1653,14 +1680,12 @@ async function load() {
     const workerSnapshot=structuredCaseResult.value?.graphSnapshot||{}
     const baseNodes=Array.isArray(g.data?.nodes)&&g.data.nodes.length
       ?g.data.nodes:Array.isArray(workerSnapshot.nodes)?workerSnapshot.nodes:[]
-    rawGraphNodes.value=baseNodes
+    rawGraphNodes.value=Array.isArray(g.data?.nodes)?g.data.nodes:[]
     const chainNodes=Array.isArray(coreChain.value?.nodes)?coreChain.value.nodes:[]
     const filteredChainNodes=chainNodes.filter((node:any)=>coreSnapshotTypes.has(nodeSnapshotType(node)))
-    const sourceNodes=presentationNodes.length
-      ?presentationNodes
-      :filteredChainNodes.length
-        ?filteredChainNodes
-        :baseNodes.filter((node:any)=>coreSnapshotTypes.has(nodeSnapshotType(node)))
+    const sourceNodes=baseNodes.length
+      ?baseNodes
+      :filteredChainNodes.length?filteredChainNodes:presentationNodes
     const nodeMap=new Map<string,any>()
     sourceNodes.forEach((node:any)=>{
       const nodeType=nodeSnapshotType(node)
@@ -1682,9 +1707,9 @@ async function load() {
     const baseEdges=Array.isArray(g.data?.edges)&&g.data.edges.length
       ?g.data.edges:Array.isArray(workerSnapshot.edges)?workerSnapshot.edges:[]
     const chainEdges=Array.isArray(coreChain.value?.edges)?coreChain.value.edges:[]
-    const sourceEdges=presentationNodes.length
-      ?presentationEdges
-      :filteredChainNodes.length?chainEdges:baseEdges
+    const sourceEdges=baseNodes.length
+      ?baseEdges
+      :filteredChainNodes.length?chainEdges:presentationEdges
     const nodeIds=new Set(graphNodes.value.map((node:any)=>String(node.uid||node.id)))
     const edgeMap=new Map<string,any>()
     sourceEdges.forEach((edge:any)=>{
@@ -1700,12 +1725,19 @@ async function load() {
     if(siblingJobId){
       try{
         const siblings:any=await getCasesApi({pageNum:1,pageSize:200,jobId:siblingJobId})
-        taskCases.value=siblings.data?.records||taskCases.value
+        if(version===loadVersion)taskCases.value=siblings.data?.records||taskCases.value
       }catch(error:any){
-        analysisLoadErrors.value={...analysisLoadErrors.value,taskCases:error?.message||'同批案例加载失败'}
+        if(version===loadVersion)analysisLoadErrors.value={...analysisLoadErrors.value,taskCases:error?.message||'同批案例加载失败'}
       }
     }
-  } catch (err:any) { ElMessage.error(err.message || '案例详情加载失败') }
+  } catch (err:any) {
+    if(version===loadVersion){
+      detailLoadError.value=err?.message||'案例详情加载失败'
+      ElMessage.error(detailLoadError.value)
+    }
+  } finally {
+    if(version===loadVersion)detailLoading.value=false
+  }
 }
 async function scrollToProduct(id:string){
   activeTab.value='analysis'

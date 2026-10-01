@@ -50,7 +50,7 @@ class CaseControllerTest {
     void platformAdministratorListDoesNotApplyLegacyDefaultBankScope() {
         when(currentUser.isBankAdmin()).thenReturn(false);
 
-        controller.getCases(1, 10, null, null, null, null, null, null, null);
+        controller.getCases(1, 10, null, null, null, null, null, null, null, false);
 
         var wrapperCaptor = org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
         verify(caseMapper).selectPage(any(IPage.class), wrapperCaptor.capture());
@@ -64,7 +64,7 @@ class CaseControllerTest {
     void platformAdministratorCanExplicitlyFilterByBank() {
         when(currentUser.isBankAdmin()).thenReturn(false);
 
-        controller.getCases(1, 10, null, null, null, null, "PSBC-XIAN", null, null);
+        controller.getCases(1, 10, null, null, null, null, "PSBC-XIAN", null, null, false);
 
         var wrapperCaptor = org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
         verify(caseMapper).selectPage(any(IPage.class), wrapperCaptor.capture());
@@ -77,12 +77,41 @@ class CaseControllerTest {
     void listCanFilterByScenario() {
         when(currentUser.isBankAdmin()).thenReturn(false);
 
-        controller.getCases(1, 10, null, null, null, null, null, null, "ANTI_FRAUD");
+        controller.getCases(1, 10, null, null, null, null, null, null, "ANTI_FRAUD", false);
 
         var wrapperCaptor = org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
         verify(caseMapper).selectPage(any(IPage.class), wrapperCaptor.capture());
         org.junit.jupiter.api.Assertions.assertTrue(
                 wrapperCaptor.getValue().getCustomSqlSegment().contains("scenario_code"));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void listCanFilterCasesWithCompletedGraphSnapshots() {
+        when(currentUser.isBankAdmin()).thenReturn(false);
+
+        controller.getCases(1, 10, null, null, null, null, null, null, null, true);
+
+        var wrapperCaptor = org.mockito.ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(caseMapper).selectPage(any(IPage.class), wrapperCaptor.capture());
+        String sql = wrapperCaptor.getValue().getCustomSqlSegment();
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("graph_snapshot"));
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("node_count > 0"));
+    }
+
+    @Test
+    void workflowReadsCaseJobRelationBeforeLegacyPayloadScan() {
+        when(caseMapper.selectOne(any())).thenReturn(caseWithStatus("APPROVED"));
+        when(jdbcTemplate.queryForList(contains("FROM workflow_instance"), eq("CASE-1")))
+                .thenReturn(List.of());
+        when(jdbcTemplate.queryForList(contains("case_analysis_job_rel rel"),
+                eq("CASE-1"), eq("CASE-1")))
+                .thenReturn(List.of(Map.of("workflowId", "JOB-1")));
+
+        var response = controller.workflow("CASE-1");
+
+        assertEquals("JOB-1", response.getData().get(0).get("workflowId"));
+        verify(jdbcTemplate, never()).queryForList(contains("result_json::text LIKE"), any(Object[].class));
     }
 
     @Test
@@ -256,7 +285,7 @@ class CaseControllerTest {
     @SuppressWarnings("unchecked")
     void structuredDetailUsesCanonicalPostgresFinalCase() {
         when(jdbcTemplate.queryForList(
-                contains("FROM structured_case_library l"), eq("CASE-1")))
+                contains("FROM case_processing_pool p"), eq("CASE-1")))
                 .thenReturn(List.of(Map.of(
                         "recognitionMode", "HISTORICAL",
                         "caseDocument", """
@@ -270,6 +299,8 @@ class CaseControllerTest {
                             """,
                         "suspiciousReport", "{}",
                         "graphSnapshot", "{\"nodeCount\":6}",
+                        "similarityResult", "{}",
+                        "libraryStatus", "ACTIVE",
                         "jobId", "JOB-1")));
 
         Map<String,Object> response = controller.loadCanonicalStructuredWorkerResult("CASE-1");
@@ -283,6 +314,33 @@ class CaseControllerTest {
         assertEquals(1, ((List<?>) framework.get("accounts")).size());
         assertEquals(1, ((List<?>) framework.get("other_entities")).size());
         assertEquals(1, ((List<?>) framework.get("relationships")).size());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void stagedCaseDetailUsesCurrentPostgresReportFrameworkAndSimilarity() {
+        when(jdbcTemplate.queryForList(
+                contains("FROM case_processing_pool p"), eq("CASE-1")))
+                .thenReturn(List.of(Map.of(
+                        "recognitionMode", "NEW",
+                        "caseDocument", "{\"customers\":[{\"customer_name\":\"张某\"}],\"events\":[{\"event_id\":\"EV-1\"}]}",
+                        "suspiciousReport", "{\"analysisText\":\"当前报告\"}",
+                        "graphSnapshot", "{\"nodeCount\":3}",
+                        "similarityResult", "{\"matches\":[{\"caseId\":\"OLD-1\",\"similarity\":0.8}]}",
+                        "processingStage", "PENDING_APPROVAL",
+                        "libraryStatus", "INACTIVE",
+                        "jobId", "JOB-1")));
+
+        Map<String,Object> response = controller.loadCanonicalStructuredWorkerResult("CASE-1");
+
+        assertEquals("POSTGRESQL_STAGED_CASE", response.get("source"));
+        assertEquals("PENDING_APPROVAL", response.get("processingStage"));
+        Map<String,Object> worker = (Map<String,Object>) response.get("workerResult");
+        Map<String,Object> result = (Map<String,Object>) ((List<?>) worker.get("results")).get(0);
+        assertEquals("当前报告", ((Map<?,?>) result.get("suspiciousReport")).get("analysisText"));
+        Map<String,Object> extraction = (Map<String,Object>) result.get("extractionResult");
+        assertEquals(1, ((List<?>) ((Map<?,?>) extraction.get("data")).get("customers")).size());
+        assertEquals(1, ((List<?>) ((Map<?,?>) result.get("similarityMatch")).get("matches")).size());
     }
 
     private CfRiskCase caseWithStatus(String status) {

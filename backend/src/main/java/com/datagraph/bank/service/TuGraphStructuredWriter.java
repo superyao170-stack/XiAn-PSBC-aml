@@ -195,8 +195,24 @@ public class TuGraphStructuredWriter {
     public Map<String,Object> rebuildCase(String caseId) {
         Map<String,Object> row = jdbc.queryForMap(
                 "SELECT bank_code,workspace_id FROM cf_risk_case WHERE case_id=? AND deleted=false", caseId);
-        Map<String,Object> facts = writeCase(caseId, Objects.toString(row.get("bank_code")),
-                row.get("workspace_id") instanceof Number value ? value.longValue() : null);
+        long workspaceId = row.get("workspace_id") instanceof Number value ? value.longValue() : 0L;
+        List<String> storedFrameworks = jdbc.queryForList("""
+                SELECT framework_result::text FROM case_processing_pool
+                WHERE case_id=? AND framework_result IS NOT NULL
+                """, String.class, caseId);
+        Map<String,Object> facts;
+        if (!storedFrameworks.isEmpty()) {
+            try {
+                JsonNode framework = new ObjectMapper().readTree(storedFrameworks.get(0));
+                facts = writeFrameworkCase(caseId, Objects.toString(row.get("bank_code")),
+                        workspaceId, framework);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+                throw new IllegalStateException("案例框架数据无法解析: " + caseId, ex);
+            }
+        } else {
+            facts = writeCase(caseId, Objects.toString(row.get("bank_code")),
+                    workspaceId == 0L ? null : workspaceId);
+        }
         Map<String,Object> result = new LinkedHashMap<>(facts);
         result.put("reasoning", writeReasoningGraph(caseId));
         return result;
