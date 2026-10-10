@@ -25,7 +25,7 @@ bash environment/local/run-backend.sh
 cd frontend && npm run dev
 
 # 后端测试
-JAVA_HOME=$(/usr/libexec/java_home -v 25) mvn -f backend/pom.xml test
+JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn -f backend/pom.xml test
 
 # 前端构建
 npm --prefix frontend run build

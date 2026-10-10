@@ -1,12 +1,12 @@
 ﻿﻿﻿﻿﻿﻿<template>
-  <div class="case-detail">
-    <div class="case-action-bar">
+  <div ref="detailRoot" class="case-detail" :class="{ 'case-detail-graph': activeTab === 'graph', 'case-detail-embedded': frameworkOnly }">
+    <div v-if="!frameworkOnly" class="case-action-bar">
       <div>
         <b>{{ displayCaseName || '案例详情' }}</b>
         <span>{{ getStatusText(caseDetail.caseStatus) }} · {{ getRiskText(caseDetail.riskLevel) }}</span>
       </div>
     </div>
-    <Teleport v-if="headerActionsReady" to="#case-header-actions">
+    <Teleport v-if="headerActionsReady && !frameworkOnly" to="#case-header-actions">
       <div class="case-header-buttons">
         <el-button v-if="caseDetail.caseStatus === 'DRAFT'" class="case-header-button" size="small" type="success" :loading="submitting" @click="submitForReview">提交复核</el-button>
         <el-select v-if="taskCases.length > 1" v-model="selectedTaskCaseId" class="case-selector" size="small" @change="switchTaskCase">
@@ -17,7 +17,7 @@
     <el-skeleton v-if="detailLoading" :rows="10" animated />
     <el-alert v-else-if="detailLoadError" type="error" :closable="false" show-icon :title="detailLoadError" />
     <el-tabs v-else v-model="activeTab" class="tabs">
-      <el-tab-pane label="可疑报告" name="report">
+      <el-tab-pane v-if="!frameworkOnly" label="可疑报告" name="report">
         <el-card class="report-card">
           <template #header>
             <div class="report-heading">
@@ -216,16 +216,16 @@
             <el-tag :type="extractionGenerated ? 'success' : 'info'">{{ extractionSourceLabel }}</el-tag>
           </div>
           <div class="overview-layer-path" aria-label="案例标准五层层级关系">
-            <a href="#overview-case"><i>01</i><span>案例基本信息</span></a><em>→</em>
-            <a href="#overview-entity"><i>02</i><span>实体层</span></a><em>→</em>
-            <a href="#overview-event"><i>03</i><span>事件层</span></a><em>→</em>
-            <a href="#overview-relation"><i>04</i><span>关系层</span></a><em>→</em>
-            <a href="#overview-evidence"><i>05</i><span>证据层</span></a>
+            <a href="#overview-case" @click.prevent="openOverviewLayer('case')"><i>01</i><span>案例基本信息</span></a><em>→</em>
+            <a href="#overview-entity" @click.prevent="openOverviewLayer('entity')"><i>02</i><span>实体层</span></a><em>→</em>
+            <a href="#overview-event" @click.prevent="openOverviewLayer('event')"><i>03</i><span>事件层</span></a><em>→</em>
+            <a href="#overview-relation" @click.prevent="openOverviewLayer('relation')"><i>04</i><span>关系层</span></a><em>→</em>
+            <a href="#overview-evidence" @click.prevent="openOverviewLayer('evidence')"><i>05</i><span>证据层</span></a>
           </div>
         </div>
         <a-collapse v-model:activeKey="activeOverviewLayers" class="framework-layers" :bordered="false">
           <a-collapse-panel key="case">
-            <template #header><div id="overview-case" class="layer-title"><i>01</i><div><b>案例基本信息</b><span>案例识别、报送、风险与处置信息</span></div><em>14 个标准字段</em><el-button size="small" type="primary" plain :disabled="caseOverviewEditing" @click.stop="startCaseOverviewEdit">编辑</el-button></div></template>
+            <template #header><div id="overview-case" class="layer-title"><i>01</i><div><b>案例基本信息</b><span>案例识别、报送、风险与处置信息</span></div><em>14 个标准字段</em><el-button v-if="!frameworkOnly" size="small" type="primary" plain :disabled="caseOverviewEditing" @click.stop="startCaseOverviewEdit">编辑</el-button></div></template>
             <CaseBasicInfoDescriptions v-if="!caseOverviewEditing" :fields="caseOverviewFields" />
             <el-form v-else :model="caseOverviewForm" label-position="top" class="case-overview-form">
               <div class="case-overview-readonly">
@@ -374,42 +374,18 @@
           </el-descriptions>
         </el-card>
       </el-tab-pane>
-      <el-tab-pane label="图谱快照" name="graph">
-        <el-card>
-          <div class="snapshot-toolbar">
-            <div class="snapshot-legend">
-              <div v-for="group in visibleSnapshotGroups" :key="group.key" class="legend-group">
-                <button class="plane-toggle"
-                  :class="{active:isGraphPlaneEnabled(group.key),partial:isGraphPlanePartiallyEnabled(group.key)}"
-                  :aria-pressed="isGraphPlaneEnabled(group.key)"
-                  @click="toggleGraphPlane(group.key)">
-                  <i></i><b>{{ group.name }}</b>
-                </button>
-                <button v-for="item in group.items" :key="item.key" class="legend-item"
-                  :class="{muted:!visibleSnapshotTypes[item.key]}"
-                  :aria-pressed="visibleSnapshotTypes[item.key]"
-                  @click="toggleSnapshotType(item.key)">
-                  <i :style="{backgroundColor:item.color}">{{ item.icon }}</i>
-                  <span :title="item.name">{{ item.name }}</span>
-                  <em>{{ snapshotTypeCount(item.key) }}</em>
-                </button>
+      <el-tab-pane v-if="!frameworkOnly" label="图谱快照" name="graph">
+        <div class="snapshot-tab-body">
+          <CaseGraphWorkbench ref="graphCanvas" :nodes="visibleGraphNodes" :edges="visibleGraphEdges" :type-meta="snapshotCanvasTypeMeta" :selected-node="selectedGraphNode" :selected-edge="selectedGraphEdge" @select="selectSnapshotNode" @select-edge="selectSnapshotEdge">
+            <template #legend>
+              <div class="snapshot-legend">
+                <div v-for="group in visibleSnapshotGroups" :key="group.key" class="legend-group">
+                  <button class="plane-toggle" :disabled="!group.items.some(item => snapshotTypeCount(item.key))" :class="{active:isGraphPlaneEnabled(group.key),partial:isGraphPlanePartiallyEnabled(group.key)}" :aria-pressed="isGraphPlaneEnabled(group.key)" @click="toggleGraphPlane(group.key)"><i></i><b>{{ group.name }}</b></button>
+                  <button v-for="item in group.items.filter(item => snapshotTypeCount(item.key))" :key="item.key" class="legend-item" :class="{muted:!visibleSnapshotTypes[item.key]}" :aria-pressed="visibleSnapshotTypes[item.key]" @click="toggleSnapshotType(item.key)"><i :style="{backgroundColor:item.color}">{{ item.icon }}</i><span>{{ item.name }}</span><em>{{ snapshotTypeCount(item.key) }}</em></button>
+                </div>
               </div>
-            </div>
-          </div>
-          <div class="snapshot-workbench">
-            <G6GraphCanvas
-              ref="graphCanvas"
-              class="graph-canvas"
-              :nodes="visibleGraphNodes"
-              :edges="visibleGraphEdges"
-              :type-meta="g6SnapshotTypeMeta"
-              :layout="snapshotLayout"
-              :highlighted-ids="[...highlightedEventIds]"
-              :height="650"
-              @select="selectedGraphNode=$event"
-              @select-edge="selectedGraphEdge=$event"
-            />
-            <aside class="snapshot-inspector">
+            </template>
+            <template #details><div class="snapshot-detail-body">
               <template v-if="selectedGraphEdge">
                 <div class="edge-detail-title">
                   <i :class="selectedGraphEdge.properties?.edgeCategory==='INFERENCE'?'inference':'fact'">边</i>
@@ -419,7 +395,7 @@
                 <div class="edge-business-explanation">
                   <b>关系含义与方向</b>
                   <p>{{ selectedGraphEdge.properties?.directionSemantics || '起点实例指向终点实例' }}</p>
-                  <small>{{ selectedGraphEdge.properties?.description || selectedGraphEdge.properties?.descriptionText || '该关系已通过起止节点类型契约校验。' }}</small>
+                  <small>{{ selectedGraphEdge.properties?.description || selectedGraphEdge.properties?.descriptionText || selectedGraphEdge.properties?.summary || '' }}</small>
                 </div>
                 <dl>
                   <div><dt>起点实例</dt><dd :title="selectedEdgeSourceName">{{ selectedEdgeSourceName }}</dd></div>
@@ -450,21 +426,16 @@
                   </div>
                 </dl>
               </template>
-              <template v-else>
-                <h4>节点详情</h4>
-                <p>点击节点查看属性；悬停节点可快速预览并高亮一度关系。</p>
-              </template>
-            </aside>
-          </div>
-          <CaseKnowledgeExplanationPanel
-            :multi-stage-matter="multiStageMatter"
-            :chains="knowledgeExplanationChains"
-            interactive
-            @open-fact="openKnowledgeFact"
-          />
-        </el-card>
+            </div></template>
+          </CaseGraphWorkbench>
+          <el-collapse class="snapshot-knowledge-disclosure">
+            <el-collapse-item title="案件解读与关联知识链路" name="knowledge">
+              <CaseKnowledgeExplanationPanel :multi-stage-matter="multiStageMatter" :chains="knowledgeExplanationChains" interactive @open-fact="openKnowledgeFact" />
+            </el-collapse-item>
+          </el-collapse>
+        </div>
       </el-tab-pane>
-      <el-tab-pane label="相似度匹配" name="similarity">
+      <el-tab-pane v-if="!frameworkOnly" label="相似度匹配" name="similarity">
         <el-card class="similarity-card">
           <template #header><div class="report-heading"><div><b>相似度匹配</b><span>{{ similarCases.length }} 条</span></div></div></template>
           <el-alert :title="similaritySummary" :type="similarCases.length ? 'success' : 'info'" :closable="false" />
@@ -525,14 +496,19 @@ import {
   Empty as AEmpty,
   Tag as ATag
 } from 'ant-design-vue'
-import G6GraphCanvas from '@/components/graph/G6GraphCanvas.vue'
+import CaseGraphWorkbench from '@/components/graph/CaseGraphWorkbench.vue'
+import { graphEdgeKey } from '@/utils/panoramaGraph'
 import CaseKnowledgeExplanationPanel from '@/components/graph/CaseKnowledgeExplanationPanel.vue'
 import CaseBasicInfoDescriptions from '@/components/case/CaseBasicInfoDescriptions.vue'
 import { getCaseApi, getCasesApi, getCaseEventsApi, getCaseWorkflowApi, getCaseGraphApi, getCaseWorkerResultApi, getCaseSignalsApi, getCaseMattersApi, getCaseTechniquesApi, getCaseReviewSuggestionsApi, getCaseReasoningApi, getCaseCoreChainApi, getCaseKnowledgeExplanationChainsApi, updateCaseReviewSuggestionApi, updateInvestigationHypothesisApi, updateCaseOverviewApi, submitCaseApi } from '@/api/case'
 import { updateStructuredCaseAnalysisTextApi } from '@/api/analysis'
 import { getEventMetadataApi } from '@/api/system'
 import { formatDateTime } from '@/utils/datetime'
+import { formatSuspiciousReport } from '@/utils/suspiciousReport'
+const props = withDefaults(defineProps<{ caseId?: string; frameworkOnly?: boolean }>(), { frameworkOnly: false })
+const detailRoot = ref<HTMLElement>()
 const route = useRoute(), router = useRouter()
+const resolvedCaseId = computed(() => props.caseId || String(route.params.caseId || route.params.id || ''))
 const submitting = ref(false)
 const allowedTabs=new Set(['report','extraction','graph','similarity'])
 const legacyTabMap:Record<string,string>={
@@ -554,7 +530,7 @@ const normalizeDetailTab=(value:any)=>{
   const normalized=legacyTabMap[requested]||requested
   return allowedTabs.has(normalized)?normalized:'overview'
 }
-const activeTab = ref(normalizeDetailTab(route.query.tab)), graphCanvas = ref<InstanceType<typeof G6GraphCanvas>>()
+const activeTab = ref(props.frameworkOnly ? 'extraction' : normalizeDetailTab(route.query.tab)), graphCanvas = ref<InstanceType<typeof CaseGraphWorkbench>>()
 const detailLoading=ref(true), detailLoadError=ref('')
 const activeOverviewLayers = ref(['case','entity','event','relation','evidence'])
 const caseDetail = ref<any>({}), events = ref<any[]>([]), signals = ref<any[]>([]), history = ref<any[]>([])
@@ -583,21 +559,12 @@ const cleanCaseName=(value:any)=>String(value||'').trim()
 const displayCaseName=computed(()=>cleanCaseName(caseDetail.value.caseName))
 const structuredCaseResult=computed<any>(()=>{
   const rows=Array.isArray(workerResult.value?.results)?workerResult.value.results:[]
-  const caseId=String(route.params.caseId||route.params.id||'')
+  const caseId=resolvedCaseId.value
   return rows.find((item:any)=>String(item?.caseId||'')===caseId)||null
 })
 const suspiciousReport=computed(()=>structuredCaseResult.value?.suspiciousReport
   ||structuredCaseResult.value?.analysisReport||{})
-const suspiciousReportText=computed(()=>{
-  const direct=String(suspiciousReport.value?.analysisText||'').trim()
-  if(direct)return direct
-  const texts=suspiciousReport.value?.analysisTexts
-  if(texts&&typeof texts==='object'){
-    const joined=Object.values(texts).filter(value=>typeof value==='string'&&value.trim()).join('\n\n')
-    if(joined)return joined
-  }
-  return ''
-})
+const suspiciousReportText=computed(()=>formatSuspiciousReport(suspiciousReport.value,caseDetail.value.scenarioCode))
 const recognitionMode=computed(()=>String(structuredCaseResult.value?.recognitionMode
   ||workerResult.value?.recognitionMode||'').toUpperCase())
 const reportSourceGenerated=computed(()=>recognitionMode.value==='NEW')
@@ -797,8 +764,44 @@ const displayScenario = computed(() => ({
   ANTI_FRAUD:'反欺诈'
 } as Record<string,string>)[String(caseDetail.value.scenarioCode||'')] || caseDetail.value.scenarioCode || '场景待补充')
 const overviewTooltipOptions={popperClass:'case-overview-cell-tooltip',placement:'top',showAfter:250,hideAfter:0}
-const structuredFramework=computed<any>(()=>structuredCaseResult.value?.extractionResult?.data
-  ||structuredCaseResult.value?.frameworkExtraction||null)
+const structuredFramework=computed<any>(()=>{
+  const framework=structuredCaseResult.value?.extractionResult?.data
+    ||structuredCaseResult.value?.frameworkExtraction
+  if(!framework)return null
+  const basic=framework.basic_info||{}
+  return {
+    ...framework,
+    basic_info:{
+      ...basic,
+      business_case_type:basic.business_case_type||basic.case_type,
+      reporting_direction:basic.reporting_direction||basic.submission_direction||basic.report_direction,
+      trigger_point:basic.trigger_point||basic.case_trigger,
+      reported_at:basic.reported_at||basic.report_date,
+      business_case_status:basic.business_case_status||basic.case_status,
+      business_risk_level:basic.business_risk_level||basic.risk_level,
+      suspicious_transaction_feature_code:basic.suspicious_transaction_feature_code||basic.suspicious_transaction_codes,
+      disposal_measure:basic.disposal_measure||basic.disposition_measures
+    },
+    customers:framework.customers?.map((item:any)=>({
+      ...item,
+      customer_no:item.customer_no||item.customer_number,
+      occupation:item.occupation||item.occupation_industry,
+      risk_level:item.risk_level||item.customer_risk_level
+    })),
+    accounts:framework.accounts?.map((item:any)=>({
+      ...item,
+      account_no:item.account_no||item.account_number,
+      opened_at:item.opened_at||item.open_date||item.account_open_date,
+      closed_at:item.closed_at||item.close_date||item.account_close_date,
+      card_type:item.card_type||item.bank_card_type,
+      card_no:item.card_no||item.bank_card_number,
+      opening_bank:item.opening_bank||item.bank_name||item.bank_info
+    })),
+    relationships:framework.relationships?.map((item:any)=>({
+      ...item,description:item.description||item.relationship_description
+    }))
+  }
+})
 const workerCase = computed(() => structuredFramework.value?.basic_info
   ||workerResult.value?.nodes?.cases?.[0]||null)
 const graphByType = (type:string) => graphNodes.value.filter((n:any)=>String(n.properties?.canonicalType || n.properties?.nodeType || n.label || '').toUpperCase()===type).map((n:any)=>({ uid:n.uid||n.id, ...(n.properties||{}), ...n }))
@@ -933,7 +936,7 @@ const normalizedEvent = (source:any) => {
   return {
     ...event,
     internalId,
-    businessId:dbEvent?.businessId||persistedBusinessId(source),
+    businessId:dbEvent?.businessId||source?.businessId||source?.business_id||source?.event_id||persistedBusinessId(source),
     uid:source?.uid||source?.event_id||internalId,
     name:meaningfulEventName({...event,...source}),
     type:eventTypeText(source?.type||source?.event_type||event.eventType||'未分类事件'),
@@ -1032,7 +1035,7 @@ const customerModels = computed(() => Array.isArray(structuredFramework.value?.c
 const accountModels = computed(() => (Array.isArray(structuredFramework.value?.accounts)
   ? structuredFramework.value.accounts
   : workerResult.value?.nodes?.accounts?.length ? workerResult.value.nodes.accounts : graphByType('ACCOUNT'))
-  .map((item:any)=>({...item,businessId:persistedBusinessId(item)})))
+  .map((item:any)=>({...item,businessId:item.businessId||item.business_id||item.entity_id||persistedBusinessId(item)})))
 const otherEntityTypeNames:Record<string,string>={
   ORGANIZATION:'机构',MERCHANT:'商户',WALLET:'钱包',
   DEVICE:'设备',IPADDRESS:'IP地址',ADDRESS:'地址'
@@ -1131,7 +1134,7 @@ const caseOverviewFields = computed(() => {
     overviewField('案例ID',displayCaseSequenceId.value),
     overviewField('案例名称',displayCaseName.value),
     overviewField('案例描述',displayCaseDescription.value,true),
-    overviewField('业务领域',displayBusinessDomain(rawOverviewValue(caseDetail.value.businessDomain,workerCase.value?.business_domain,workerCase.value?.businessDomain,'01-反洗钱'))),
+    overviewField('业务领域',displayBusinessDomain(rawOverviewValue(caseDetail.value.scenarioCode,caseDetail.value.businessDomain,workerCase.value?.business_domain,workerCase.value?.businessDomain))),
     overviewField('案例类型',rawOverviewValue(caseDetail.value.businessCaseType,item.business_case_type,item.businessCaseType)),
     overviewField('报送方向',rawOverviewValue(caseDetail.value.reportingDirection,item.reporting_direction,item.reportingDirection,item.report_direction,item.reportDirection),true),
     overviewField('案例触发点',rawOverviewValue(caseDetail.value.triggerPoint,item.trigger_point,item.triggerPoint,item.case_trigger,item.caseTrigger),true),
@@ -1266,12 +1269,12 @@ type SnapshotPlane = 'EVENT_GRAPH'|'REASONING_GRAPH'
 type SnapshotType = {key:string;name:string;icon:string;color:string;plane:SnapshotPlane;planeName:string;formal?:boolean}
 const snapshotTypes:SnapshotType[]=[
   {key:'CASE',name:'案件',icon:'案',color:'#13233a',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'EVENT',name:'事件',icon:'事',color:'#1769e0',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'EVIDENCE',name:'证据',icon:'证',color:'#e9a400',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'CUSTOMER',name:'客户',icon:'客',color:'#00a870',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'EVENT',name:'事件',icon:'事',color:'#5484bf',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'EVIDENCE',name:'证据',icon:'证',color:'#c8861b',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'CUSTOMER',name:'客户',icon:'客',color:'#3478e5',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'ORGANIZATION',name:'机构',icon:'机',color:'#0d9488',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'MERCHANT',name:'商户',icon:'商',color:'#059669',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'ACCOUNT',name:'账户',icon:'户',color:'#7c3aed',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'MERCHANT',name:'商户',icon:'商',color:'#7958c9',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'ACCOUNT',name:'账户',icon:'户',color:'#159877',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'WALLET',name:'钱包',icon:'包',color:'#8b5cf6',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'DEVICE',name:'设备',icon:'设',color:'#0369a1',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'IPADDRESS',name:'IP地址',icon:'IP',color:'#0284c7',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
@@ -1283,7 +1286,7 @@ const snapshotTypes:SnapshotType[]=[
 ]
 const snapshotTypeMap=Object.fromEntries(snapshotTypes.map(item=>[item.key,item])) as Record<string,SnapshotType>
 const coreSnapshotTypes=new Set(snapshotTypes.map(item=>item.key))
-const g6SnapshotTypeMeta=computed(()=>Object.fromEntries(snapshotTypes.map(item=>[item.key,{name:item.name,color:item.color,icon:item.icon,planeName:item.planeName}]).concat([
+const snapshotCanvasTypeMeta=computed(()=>Object.fromEntries(snapshotTypes.map(item=>[item.key,{name:item.name,color:item.color,icon:item.icon,planeName:item.planeName}]).concat([
   ['OTHER',{name:'其他节点',color:'#64748b',icon:'其',planeName:'其他'}]
 ])))
 const normalizeSnapshotType=(value:any)=>String(value||'UNKNOWN').replace(/[^A-Za-z0-9]/g,'').toUpperCase()
@@ -1298,7 +1301,7 @@ const snapshotTypeCounts=computed(()=>{
   return counts
 })
 const snapshotTypeCount=(key:string)=>snapshotTypeCounts.value[key]||0
-const visibleSnapshotGroups=computed<any[]>(()=>{
+const visibleSnapshotGroups=computed<Array<{key:SnapshotPlane;name:string;items:SnapshotType[]}>>(()=>{
   return [
     {key:'EVENT_GRAPH',name:'事件图谱',items:snapshotTypes.filter(item=>item.plane==='EVENT_GRAPH')},
     {key:'REASONING_GRAPH',name:'事理图谱',items:snapshotTypes.filter(item=>item.plane==='REASONING_GRAPH')}
@@ -1307,10 +1310,10 @@ const visibleSnapshotGroups=computed<any[]>(()=>{
 const visibleGraphNodes=computed(()=>graphNodes.value
   .filter((node:any)=>visibleSnapshotTypes.value[nodeSnapshotType(node)]===true)
   .map((node:any)=>{
-    const currentCaseId=String(route.params.caseId||route.params.id||'')
+    const currentCaseId=resolvedCaseId.value
     const nodeCaseId=String(node.properties?.caseId||node.caseId||'')
     const visualPrimary=nodeSnapshotType(node)==='CASE'&&nodeCaseId===currentCaseId
-    return {...node,visualPrimary,visualLabel:graphNodeTitle(node)}
+    return {...node,id:String(node.uid||node.id),visualPrimary,visualType:nodeSnapshotType(node),visualCaseId:currentCaseId,visualCaseName:displayCaseName.value,visualLabel:graphNodeTitle(node)}
   }))
 const visibleGraphEdges=computed(()=>{
   const ids=new Set(visibleGraphNodes.value.map((node:any)=>String(node.uid||node.id)))
@@ -1318,15 +1321,19 @@ const visibleGraphEdges=computed(()=>{
     .filter((edge:any)=>ids.has(String(edge.source||edge.from||edge.start))&&ids.has(String(edge.target||edge.to||edge.end)))
     .map((edge:any)=>{
       const visualLabel=relationDisplayName(edge)
-      return {...edge,visualLabel,properties:{...(edge.properties||{}),relationName:visualLabel}}
+      return {...edge,source:String(edge.source||edge.from||edge.start),target:String(edge.target||edge.to||edge.end),visualLabel,properties:{...(edge.properties||{}),relationName:visualLabel}}
     })
 })
-const snapshotLayout=computed(()=>'grid' as const)
 function typeMeta(type:string):SnapshotType {
   return snapshotTypeMap[normalizeSnapshotType(type)]||{key:normalizeSnapshotType(type),name:'其他节点',icon:'其',color:'#64748b',plane:'EVENT_GRAPH',planeName:'其他'}
 }
 const graphTypeMeta=(node:any)=>typeMeta(nodeSnapshotType(node))
-const graphNodeTitle=(node:any)=>String(node?.name||node?.properties?.caseName||node?.properties?.caseId||node?.properties?.eventName||node?.properties?.name||node?.properties?.summary||node?.uid||node?.id||'未命名节点')
+const graphNodeTitle=(node:any)=>{
+  const properties=node?.properties||{}, type=nodeSnapshotType(node)
+  if(type==='CASE')return String(properties.caseName||node?.name||displayCaseName.value||properties.caseId||'案件')
+  if(type==='EVENT')return String(properties.eventName||properties.event_name||properties.displayName||meaningfulEventName({...properties,...node}))
+  return String(properties.displayName||properties.customerName||properties.customer_name||properties.accountNo||properties.account_no||properties.patternName||properties.pattern_name||properties.title||properties.name||node?.name||properties.summary||properties.hypothesis||node?.uid||node?.id||'未命名节点')
+}
 const graphNodeRoleName=(node:any)=>({
   INDICATORRESULT:'指标计算结果',
   BEHAVIORPATTERN:'组合行为判断',
@@ -1557,7 +1564,6 @@ const selectedReasoningSemantics=computed(()=>{
     boundary:String(properties.decisionBoundary||'该节点属于案例推理实例，需结合证据和人工复核使用。')
   }
 })
-const highlightedEventIds=computed<Set<string>>(()=>new Set<string>())
 const certaintyText=(value:string)=>businessEnumText(value)
 const certaintyType=(value:string)=>value==='OBSERVED'||value==='CONFIRMED'?'success':value==='REPORTED'||value==='EXTRACTED'?'warning':'info'
 const confidenceText=(value:any)=>value==null||value===''?'—':`${Math.round(Number(value)*100)}%`
@@ -1583,6 +1589,11 @@ const isGraphPlanePartiallyEnabled=(plane:string)=>{
   const keys=graphPlaneTypeKeys(plane)
   const enabled=keys.filter(key=>visibleSnapshotTypes.value[key]).length
   return enabled>0&&enabled<keys.length
+}
+function selectSnapshotNode(node:any|null){selectedGraphNode.value=node;selectedGraphEdge.value=null}
+function selectSnapshotEdge(edge:any){
+  selectedGraphEdge.value=edge
+  selectedGraphNode.value=visibleGraphNodes.value.find(node=>String(node.id)===String(edge.target))||visibleGraphNodes.value.find(node=>String(node.id)===String(edge.source))||null
 }
 function toggleGraphPlane(plane:string){
   const keys=graphPlaneTypeKeys(plane)
@@ -1625,7 +1636,7 @@ async function saveCaseOverview(){
     const payload=Object.fromEntries(Object.entries(caseOverviewForm.value)
       .map(([key,value])=>[key,String(value||'').trim()||null]))
     const response:any=await updateCaseOverviewApi(
-      String(route.params.caseId||route.params.id||''),payload)
+      resolvedCaseId.value,payload)
     caseDetail.value={...caseDetail.value,...(response.data||{})}
     caseOverviewEditing.value=false
     caseOverviewForm.value={}
@@ -1638,10 +1649,12 @@ async function saveCaseOverview(){
 }
 let loadVersion=0
 async function load() {
-  const id = String(route.params.caseId || route.params.id || ''); if (!id) return
+  const id = resolvedCaseId.value; if (!id) return
   const version=++loadVersion
   detailLoading.value=true
   detailLoadError.value=''
+  selectedGraphNode.value=null
+  selectedGraphEdge.value=null
   try {
     analysisLoadErrors.value={}
     const optional = (key:string,request: Promise<any>, fallback: any) => request.catch((error:any) => {
@@ -1716,8 +1729,9 @@ async function load() {
       const source=String(edge.source||edge.from||edge.start)
       const target=String(edge.target||edge.to||edge.end)
       if(!nodeIds.has(source)||!nodeIds.has(target))return
-      const key=String(edge.uid||edge.id||`${source}->${target}:${edge.type||edge.label}`)
-      edgeMap.set(key,edge)
+      const normalized={...edge,source,target}
+      const key=graphEdgeKey({...normalized,properties:{...(edge.properties||{}),relationName:relationDisplayName(edge)}})
+      edgeMap.set(key,normalized)
     })
     graphEdges.value=[...edgeMap.values()]
     matters.value=m.data||[];techniques.value=t.data||[];reviewSuggestions.value=rs.data||[];reasoning.value=rr.data||{}
@@ -1745,13 +1759,13 @@ async function scrollToProduct(id:string){
   document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})
 }
 async function openOverviewLayer(layer:string){
-  activeTab.value='overview'
+  activeTab.value='extraction'
   if(!activeOverviewLayers.value.includes(layer))activeOverviewLayers.value.push(layer)
   await nextTick()
-  document.getElementById(`overview-${layer}`)?.scrollIntoView({behavior:'smooth',block:'start'})
+  detailRoot.value?.querySelector(`#overview-${layer}`)?.scrollIntoView({behavior:'smooth',block:'start'})
 }
 async function submitForReview(){
-  const id=String(route.params.caseId||route.params.id||'')
+  const id=resolvedCaseId.value
   submitting.value=true
   try{
     await submitCaseApi(id)
@@ -1762,7 +1776,7 @@ async function submitForReview(){
   }finally{submitting.value=false}
 }
 const switchTaskCase=async(caseId:string)=>{
-  if(!caseId||caseId===String(route.params.caseId||''))return
+  if(!caseId||caseId===resolvedCaseId.value)return
   await router.push({path:`/case/detail/${encodeURIComponent(caseId)}`,query:{...route.query,jobId:workerJobId.value||route.query.jobId,tab:activeTab.value}})
 }
 const startReportEdit=()=>{reportDraft.value=suspiciousReportText.value;reportEditing.value=true}
@@ -1770,7 +1784,7 @@ const cancelReportEdit=()=>{reportDraft.value=suspiciousReportText.value;reportE
 const saveReport=async()=>{
   const text=reportDraft.value.trim()
   if(!text)return ElMessage.warning('可疑报告不能为空')
-  const caseId=String(route.params.caseId||'')
+  const caseId=resolvedCaseId.value
   if(!workerJobId.value||!caseId)return ElMessage.error('未找到该案例对应的识别任务')
   reportSaving.value=true
   try{
@@ -1786,10 +1800,10 @@ const saveReport=async()=>{
   finally{reportSaving.value=false}
 }
 async function acknowledgeSuggestion(row:any){
-  try{await updateCaseReviewSuggestionApi(String(route.params.caseId||route.params.id||''),row.suggestionId,{status:'ACKNOWLEDGED',resolution:'当前无法补充，已知悉该建议'});ElMessage.success('已记录，不影响当前案例解释');await load()}catch(e:any){ElMessage.error(e.message||'更新失败')}
+  try{await updateCaseReviewSuggestionApi(resolvedCaseId.value,row.suggestionId,{status:'ACKNOWLEDGED',resolution:'当前无法补充，已知悉该建议'});ElMessage.success('已记录，不影响当前案例解释');await load()}catch(e:any){ElMessage.error(e.message||'更新失败')}
 }
 async function acknowledgeHypothesis(row:any){
-  try{await updateInvestigationHypothesisApi(String(route.params.caseId||route.params.id||''),row.hypothesisId,{status:'ACKNOWLEDGED',resolution:'已受理，等待可用材料'});ElMessage.success('调查假设已受理');await load()}catch(e:any){ElMessage.error(e.message||'更新失败')}
+  try{await updateInvestigationHypothesisApi(resolvedCaseId.value,row.hypothesisId,{status:'ACKNOWLEDGED',resolution:'已受理，等待可用材料'});ElMessage.success('调查假设已受理');await load()}catch(e:any){ElMessage.error(e.message||'更新失败')}
 }
 const headerActionsReady=ref(false)
 onMounted(()=>{
@@ -1798,6 +1812,7 @@ onMounted(()=>{
 })
 const nextAnimationFrame=()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))
 watch(activeTab, async (tab)=>{
+  if(props.frameworkOnly)return
   if(String(route.query.tab||'')!==tab){
     await router.replace({query:{...route.query,tab}})
   }
@@ -1808,8 +1823,8 @@ watch(activeTab, async (tab)=>{
   await nextAnimationFrame()
   await graphCanvas.value?.fitView()
 })
-watch(()=>route.query.tab,(value)=>{activeTab.value=normalizeDetailTab(value)})
-watch(()=>route.params.caseId,async(value,previous)=>{
+watch(()=>route.query.tab,(value)=>{if(!props.frameworkOnly)activeTab.value=normalizeDetailTab(value)})
+watch(resolvedCaseId,async(value,previous)=>{
   if(!previous||value===previous)return
   reportEditing.value=false
   activeOverviewLayers.value=['case','entity','event','relation','evidence']
@@ -1822,6 +1837,7 @@ const getStatusTagType = (v:string) => ({ APPROVED:'success', HIGH:'danger', REJ
 </script>
 
 <style scoped>
+.case-detail-embedded{height:auto;min-width:0;overflow:visible}.case-detail-embedded :deep(.tabs > .el-tabs__header){display:none}
 .case-action-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 12px;border-bottom:1px solid #dbe3ee;background:rgba(255,255,255,.96);backdrop-filter:blur(8px)}.case-action-bar>div{display:flex;align-items:center;gap:9px}.case-action-bar span{color:#64748b;font-size:12px}
 .case-header-buttons{display:flex;align-items:center;gap:8px}.case-selector{width:380px}.report-card,.similarity-card{border-color:#d8e4f1;border-radius:12px}.report-heading,.report-heading>div{display:flex;align-items:center;justify-content:space-between;gap:10px}.report-heading{width:100%}.report-heading b{color:#17314f;font-size:17px}.report-heading span{color:#64748b}.report-content{min-height:420px;color:#334155;font-size:13px;line-height:1.82;white-space:pre-wrap;overflow-wrap:anywhere}.report-editor :deep(textarea){font-size:13px;line-height:1.75}.similarity-table{margin-top:14px}@media(max-width:1000px){.case-selector{width:260px}}
 .fact-header-actions{display:flex;align-items:center;gap:10px}.fact-basis-links{display:flex;align-items:center;white-space:nowrap}.fact-basis-links .el-button{height:auto;padding:0;font-size:12px}.fact-basis-links>span{color:#94a3b8}.evidence-quote{line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}.pattern-code{display:block;margin-top:3px;color:#64748b;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;font-weight:400}
@@ -1885,5 +1901,8 @@ const getStatusTagType = (v:string) => ({ APPROVED:'success', HIGH:'danger', REJ
 :global(.case-overview-cell-tooltip.el-popper){max-width:min(520px,calc(100vw - 32px));white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.6}
 .knowledge-chain-table thead th{text-align:center}
 .confidence-value{cursor:help;border-bottom:1px dotted #94a3b8}
+
+.case-detail.case-detail-graph{height:100%;margin-top:0;display:flex;flex-direction:column;min-height:0;overflow:hidden}.case-detail-graph .case-action-bar{flex:none;margin-bottom:6px}.case-detail-graph .tabs{min-height:0;flex:1;display:flex;flex-direction:column}.case-detail-graph .tabs :deep(.el-tabs__header){flex:none}.case-detail-graph .tabs :deep(.el-tabs__content){flex:1;min-height:0;overflow:hidden}.case-detail-graph .tabs :deep(#pane-graph){height:100%;min-height:0}.snapshot-tab-body{height:100%;min-height:0;display:flex;flex-direction:column;gap:8px}.snapshot-tab-body>.case-graph-workspace{flex:1;min-height:180px;height:auto}.snapshot-tab-body .snapshot-legend{display:flex;flex-wrap:wrap;gap:5px 14px}.snapshot-tab-body .legend-group{gap:3px}.snapshot-tab-body .legend-item{border:0;border-radius:4px;padding:2px 4px;color:#687e96;background:none}.snapshot-tab-body .legend-item i{width:14px;height:14px;font-size:9px}.snapshot-tab-body .legend-item em{background:none;padding:0 2px;color:#92a0af}.snapshot-tab-body .plane-toggle{font-size:11px;height:24px}.snapshot-tab-body .plane-toggle:disabled{opacity:.4;cursor:not-allowed}.snapshot-knowledge-disclosure{flex:none;border:1px solid #e3eaf2;border-radius:8px;overflow:hidden;background:#fff}.snapshot-knowledge-disclosure :deep(.el-collapse-item__header){height:30px;line-height:30px;padding:0 12px;border:0;font-size:12px;color:#657e9c}.snapshot-knowledge-disclosure :deep(.el-collapse-item__wrap){max-height:220px;overflow:auto}.snapshot-knowledge-disclosure :deep(.el-collapse-item__content){padding-bottom:0}.snapshot-detail-body h4{margin:6px 0;color:#243c58;font-size:16px;line-height:1.5;overflow-wrap:anywhere}.snapshot-detail-body .node-detail-title,.snapshot-detail-body .edge-detail-title{gap:7px;margin-bottom:7px}.snapshot-detail-body .node-detail-title i,.snapshot-detail-body .edge-detail-title>i{width:22px;height:22px;font-size:10px}.snapshot-detail-body .node-detail-title b,.snapshot-detail-body .edge-detail-title b{font-size:11px}.snapshot-detail-body .node-detail-title small,.snapshot-detail-body .edge-detail-title small{font-size:10px;color:#8b9aac}.snapshot-detail-body dl{display:grid;gap:8px;margin:10px 0 0}.snapshot-detail-body dl>div{display:grid;grid-template-columns:64px minmax(0,1fr);gap:7px;font-size:11px}.snapshot-detail-body dt{font-size:11px;color:#8b9aac}.snapshot-detail-body dd{margin:0;color:#536a85;line-height:1.55;white-space:normal;overflow-wrap:anywhere;max-height:110px;overflow:auto}.snapshot-detail-body .node-business-explanation,.snapshot-detail-body .edge-business-explanation{padding:8px;margin:10px 0;background:#f1f6ff;border-left:2px solid #9bbbea}.snapshot-detail-body .node-business-explanation b,.snapshot-detail-body .edge-business-explanation b{font-size:11px;color:#597aa3}.snapshot-detail-body .node-business-explanation p,.snapshot-detail-body .edge-business-explanation p,.snapshot-detail-body .edge-business-explanation small{font-size:11px;color:#627892;line-height:1.6}.snapshot-detail-body .reasoning-node-semantics{font-size:11px;line-height:1.6}.snapshot-detail-body .reasoning-node-semantics p{font-size:11px}.snapshot-tab-body button:focus-visible{outline:2px solid #3478e5;outline-offset:2px}
+
 </style>
 <style scoped src="@/styles/case-overview-shared.scss"></style>

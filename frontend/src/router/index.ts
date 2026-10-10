@@ -35,7 +35,8 @@ const router = createRouter({
         { path: 'system/roles', name: 'Roles', component: () => import('@/views/system/Roles.vue') },
         { path: 'system/menus', name: 'Menus', component: () => import('@/views/system/Menus.vue') },
         { path: 'system/event-metadata', name: 'EventMetadata', component: () => import('@/views/system/EventMetadata.vue') },
-        { path: 'system/indicators', name: 'IndicatorManagement', component: () => import('@/views/system/IndicatorManagement.vue') }
+        { path: 'system/indicators', name: 'IndicatorManagement', component: () => import('@/views/system/IndicatorManagement.vue') },
+        { path: 'system/audit-logs', name: 'AuditLogs', component: () => import('@/views/system/AuditLogs.vue') }
       ]
     }
   ]

@@ -41,6 +41,8 @@ tmp_*.py
 *.iml
 .env
 .env.*
+.env_*
+/logs/
 ~$*
 
 # Python caches
