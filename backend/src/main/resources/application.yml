@@ -97,6 +97,13 @@ springdoc:
     path: /swagger-ui.html
 
 logging:
+  file:
+    name: ${APP_LOG_FILE:logs/bankgraph.log}
+  logback:
+    rollingpolicy:
+      max-file-size: ${APP_LOG_MAX_FILE_SIZE:100MB}
+      max-history: ${APP_LOG_MAX_HISTORY:30}
+      total-size-cap: ${APP_LOG_TOTAL_SIZE_CAP:2GB}
   level:
     com.datagraph.bank: ${APP_LOG_LEVEL:INFO}
     org.springframework.security: ${SECURITY_LOG_LEVEL:WARN}

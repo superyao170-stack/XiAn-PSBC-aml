@@ -84,6 +84,18 @@ def existing_analysis_text(record: dict[str, Any]) -> str:
     return "\n\n".join(existing_analysis_texts(record).values())
 
 
+def _display_analysis_text(analysis_texts: dict[str, str]) -> str:
+    sections = []
+    for key, value in analysis_texts.items():
+        text = value.strip()
+        if key in {"analysis_text1", "analysis_text2"} and not (
+            text == key or text.startswith(f"{key}\n")
+        ):
+            text = f"{key}\n{text}"
+        sections.append(text)
+    return "\n\n".join(sections)
+
+
 def _case_information(record: dict[str, Any]) -> dict[str, Any]:
     basic_info = _object(record, "basic_info", "basicInfo")
     customers = _list(record, "customers", "customer_info", "customerInfo")
@@ -154,7 +166,7 @@ def generate_analysis_text(record: dict[str, Any]) -> dict[str, Any]:
     }
     return {
         "analysisTexts": analysis_texts,
-        "analysisText": "\n\n".join(analysis_texts.values()),
+        "analysisText": _display_analysis_text(analysis_texts),
         "source": "GENERATED_ANALYSIS_TEXT",
         "generated": True,
         "paragraphs": {
@@ -179,7 +191,7 @@ def ensure_analysis_text(record: dict[str, Any]) -> dict[str, Any]:
     if current:
         return {
             "analysisTexts": current,
-            "analysisText": "\n\n".join(current.values()),
+            "analysisText": _display_analysis_text(current),
             "source": "EXISTING_ANALYSIS_TEXT",
             "generated": False,
             "algorithm": "existing-input",

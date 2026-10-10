@@ -6,8 +6,21 @@ release_dir="$(mktemp -d)"
 trap 'rm -rf "$release_dir"' EXIT
 
 cd "$project_root"
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  export JAVA_HOME="$(/usr/libexec/java_home -v 25)"
+if [[ -z "${JAVA_HOME:-}" && "$(uname -s)" == "Darwin" && -x /usr/libexec/java_home ]]; then
+  resolved_java_home="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
+  if [[ -n "$resolved_java_home" ]]; then
+    export JAVA_HOME="$resolved_java_home"
+  fi
+fi
+if [[ -z "${JAVA_HOME:-}" || ! -x "$JAVA_HOME/bin/java" ]]; then
+  echo "未找到 Java 21，请设置 JAVA_HOME 为 JDK 21 后重试。" >&2
+  exit 1
+fi
+JAVA_VERSION="$($JAVA_HOME/bin/java -version 2>&1 | head -n 1)"
+if [[ ! "$JAVA_VERSION" =~ \"21([.\"]|$) ]]; then
+  echo "当前不是 Java 21：$JAVA_VERSION" >&2
+  echo "请设置 JAVA_HOME 为 JDK 21 后重试。" >&2
+  exit 1
 fi
 mvn -f backend/pom.xml clean package
 npm --prefix frontend ci
@@ -16,7 +29,20 @@ npm --prefix frontend run build
 mkdir -p "$release_dir/bankgraph/backend" "$release_dir/bankgraph/frontend" "$release_dir/bankgraph/environment"
 cp backend/target/bankgraph-backend-*.jar "$release_dir/bankgraph/backend/app.jar"
 cp -R frontend/dist "$release_dir/bankgraph/frontend/dist"
-cp -R workers "$release_dir/bankgraph/workers"
+mkdir -p "$release_dir/bankgraph/workers"
+tar -C workers \
+  --exclude='./.venv' \
+  --exclude='*/.venv' \
+  --exclude='./.env' \
+  --exclude='*/.env' \
+  --exclude='./.env_*' \
+  --exclude='*/.env_*' \
+  --exclude='*/__pycache__' \
+  --exclude='*/.pytest_cache' \
+  --exclude='*/uploads' \
+  --exclude='*/runs' \
+  --exclude='.DS_Store' \
+  -cf - . | tar -C "$release_dir/bankgraph/workers" -xf -
 cp -R environment/baota "$release_dir/bankgraph/environment/baota"
 cp -R environment/public "$release_dir/bankgraph/environment/public"
 

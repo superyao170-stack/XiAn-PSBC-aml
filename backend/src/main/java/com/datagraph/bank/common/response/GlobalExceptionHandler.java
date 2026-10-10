@@ -3,6 +3,7 @@ package com.datagraph.bank.common.response;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.slf4j.Logger;
@@ -26,6 +27,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public CommonResult<Void> handleMethodNotSupported(HttpRequestMethodNotSupportedException exception) {
         return CommonResult.error(405, "请求方法不支持");
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public CommonResult<Void> handleNotFound(NoResourceFoundException exception) {
+        return CommonResult.notFound("请求资源不存在");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -40,3 +40,9 @@ export const updateDictApi = (dictType: string, id: number, data: Record<string,
   request.put(`/api/v1/system/dict/${dictType}/${id}`, data)
 export const deleteDictApi = (dictType: string, id: number) =>
   request.delete(`/api/v1/system/dict/${dictType}/${id}`)
+
+export const getOperationAuditLogsApi = (params: Record<string, unknown> = {}) =>
+  request.get('/api/v1/system/audit/operations', { params })
+
+export const getLoginAuditLogsApi = (params: Record<string, unknown> = {}) =>
+  request.get('/api/v1/system/audit/logins', { params })
