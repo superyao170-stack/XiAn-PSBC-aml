@@ -497,7 +497,7 @@ import {
   Tag as ATag
 } from 'ant-design-vue'
 import CaseGraphWorkbench from '@/components/graph/CaseGraphWorkbench.vue'
-import { graphEdgeKey } from '@/utils/panoramaGraph'
+import { graphEdgeKey, graphNodeType } from '@/utils/panoramaGraph'
 import CaseKnowledgeExplanationPanel from '@/components/graph/CaseKnowledgeExplanationPanel.vue'
 import CaseBasicInfoDescriptions from '@/components/case/CaseBasicInfoDescriptions.vue'
 import { getCaseApi, getCasesApi, getCaseEventsApi, getCaseWorkflowApi, getCaseGraphApi, getCaseWorkerResultApi, getCaseSignalsApi, getCaseMattersApi, getCaseTechniquesApi, getCaseReviewSuggestionsApi, getCaseReasoningApi, getCaseCoreChainApi, getCaseKnowledgeExplanationChainsApi, updateCaseReviewSuggestionApi, updateInvestigationHypothesisApi, updateCaseOverviewApi, submitCaseApi } from '@/api/case'
@@ -804,8 +804,8 @@ const structuredFramework=computed<any>(()=>{
 })
 const workerCase = computed(() => structuredFramework.value?.basic_info
   ||workerResult.value?.nodes?.cases?.[0]||null)
-const graphByType = (type:string) => graphNodes.value.filter((n:any)=>String(n.properties?.canonicalType || n.properties?.nodeType || n.label || '').toUpperCase()===type).map((n:any)=>({ uid:n.uid||n.id, ...(n.properties||{}), ...n }))
-const rawGraphByType = (type:string) => rawGraphNodes.value.filter((n:any)=>String(n.properties?.canonicalType || n.properties?.nodeType || n.label || '').toUpperCase()===type).map((n:any)=>({ uid:n.uid||n.id, ...(n.properties||{}), ...n }))
+const graphByType = (type:string) => graphNodes.value.filter((n:any)=>graphNodeType(n)===type.replace(/[^A-Za-z0-9]/g,'').toUpperCase()).map((n:any)=>({ uid:n.uid||n.id, ...(n.properties||{}), ...n }))
+const rawGraphByType = (type:string) => rawGraphNodes.value.filter((n:any)=>graphNodeType(n)===type.replace(/[^A-Za-z0-9]/g,'').toUpperCase()).map((n:any)=>({ uid:n.uid||n.id, ...(n.properties||{}), ...n }))
 const persistedBusinessId = (item:any) => {
   const direct=item?.businessId||item?.business_id||item?.properties?.businessId
   if(direct)return String(direct)
@@ -1003,13 +1003,15 @@ const evidenceModels = computed(() => {
       : (graphByType('EVIDENCE').length ? graphByType('EVIDENCE') : signals.value.map((s:any)=>({uid:s.signalId,businessId:s.businessId,type:s.signalType,name:s.scenarioCode,summary:(s.reasonCodes||[]).join('、')||s.decision,source:s.algorithmId})))
   return source.map((e:any)=>{
     const association=evidenceAssociation(e)
+    const attributes={...e,...(association.graphEvidence?.properties||{})}
     return {
-      ...e,...(association.graphEvidence?.properties||{}),
-      businessId:association.graphEvidence?.properties?.businessId||persistedBusinessId(e),
-      type:e.type||e.source||'未分类证据',
-      summary:e.summary||e.description||'',
-      associationType:association.associationType,
-      associationId:association.associationId
+      ...attributes,
+      businessId:attributes.evidence_id||attributes.businessId||persistedBusinessId(e),
+      type:attributes.evidence_type||attributes.type||attributes.source||'未分类证据',
+      source:attributes.evidence_source||attributes.source||attributes.data_source||attributes.dataSource||'',
+      summary:attributes.summary||attributes.description||attributes.original_data||'',
+      associationType:attributes.evidence_link_type||association.associationType,
+      associationId:attributes.evidence_link_id||association.associationId
     }
   })
 })
@@ -1038,33 +1040,34 @@ const accountModels = computed(() => (Array.isArray(structuredFramework.value?.a
   .map((item:any)=>({...item,businessId:item.businessId||item.business_id||item.entity_id||persistedBusinessId(item)})))
 const otherEntityTypeNames:Record<string,string>={
   ORGANIZATION:'机构',MERCHANT:'商户',WALLET:'钱包',
-  DEVICE:'设备',IPADDRESS:'IP地址',ADDRESS:'地址'
+  DEVICE:'设备',IPADDRESS:'IP地址',ADDRESS:'地址',OTHERENTITY:'其他实体'
 }
 const otherEntityInternalKeys=new Set([
   'uid','id','namespace_uid','namespaceUid','nodeType','canonicalType',
   'graphPlane','graphDomain','objectSemantics','instanceId','caseId',
   'businessId','contentSha256','sourceRef','epistemicType','visualLabel','visualType'
 ])
-const otherEntityModels=computed(()=>structuredFramework.value?.other_entities?.length
-  ? structuredFramework.value.other_entities.map((entity:any)=>({
-      entityId:entity.entity_id||entity.id||'待补充',entityType:entity.entity_type||entity.type||'其他实体',
-      attribute1:entity.entity_attr_1||entity.name||'待补充',attribute2:entity.entity_attr_2||'待补充',
-      attribute3:entity.entity_attr_3||'待补充',attribute4:entity.entity_attr_4||'待补充'
-    }))
-  : Object.entries(otherEntityTypeNames).flatMap(([type,typeName])=>
-  graphByType(type).map((entity:any)=>{
+const otherEntityModel=(entity:any,typeName='其他实体')=>{
     const attributes=Object.entries(entity)
-      .filter(([key,value])=>!otherEntityInternalKeys.has(key)&&value!==''&&value!==null&&value!==undefined)
+      .filter(([key,value])=>!otherEntityInternalKeys.has(key)&&!['properties','label','entity_id','entityId','entity_type','entityType','entity_attr_1','entity_attr_2','entity_attr_3','entity_attr_4'].includes(key)&&value!==''&&value!==null&&value!==undefined)
       .map(([key,value])=>`${graphPropertyLabels[key]||key}：${displayGraphValue(value)}`)
     return {
-      entityId:persistedBusinessId(entity),
-      entityType:typeName,
-      attribute1:attributes[0]||'待补充',
-      attribute2:attributes[1]||'待补充',
-      attribute3:attributes[2]||'待补充',
-      attribute4:attributes.slice(3).join('；')||'待补充'
+      entityId:entity.entity_id||entity.entityId||entity.businessId||persistedBusinessId(entity),
+      entityType:entity.entity_type||entity.entityType||entity.type||typeName,
+      attribute1:entity.entity_attr_1||attributes[0]||'待补充',
+      attribute2:entity.entity_attr_2||attributes[1]||'待补充',
+      attribute3:entity.entity_attr_3||attributes[2]||'待补充',
+      attribute4:entity.entity_attr_4||attributes.slice(3).join('；')||'待补充'
     }
-  })))
+}
+const otherEntityModels=computed(()=>{
+  const extracted=structuredFramework.value?.other_entities
+  if(extracted?.length)return extracted.map((entity:any)=>otherEntityModel(entity))
+  const workerEntities=workerResult.value?.nodes?.other_entities||workerResult.value?.nodes?.otherEntities
+  if(Array.isArray(workerEntities)&&workerEntities.length)return workerEntities.map((entity:any)=>otherEntityModel(entity))
+  return Object.entries(otherEntityTypeNames).flatMap(([type,typeName])=>
+    graphByType(type).map((entity:any)=>otherEntityModel(entity,typeName)))
+})
 const rawOverviewValue = (...values:any[]) => {
   const value=values.find(item=>item!==undefined&&item!==null&&String(item).trim()!=='')
   if(Array.isArray(value))return value.length?value.join('、'):null
@@ -1179,7 +1182,7 @@ const accountOverviewFields = (account:any) => [
   overviewField('客户销户时间',rawOverviewValue(account.closed_at,account.closedAt,account.close_date,account.closeDate)),
   overviewField('归属省份',rawOverviewValue(account.province,account.owning_province,account.owningProvince)),
   overviewField('归属机构',rawOverviewValue(account.institution,account.organization,account.owning_institution,account.owningInstitution)),
-  overviewField('账号',rawOverviewValue(account.account_no,account.accountNo),true),
+  overviewField('账号',rawOverviewValue(account.account_no,account.accountNo,account.account_number),true),
   overviewField('银行卡类型',rawOverviewValue(account.card_type,account.cardType)),
   overviewField('开户行信息',rawOverviewValue(account.opening_bank,account.openingBank,account.bank_name,account.bankName),true),
   overviewField('银行卡号码',rawOverviewValue(account.card_no,account.cardNo),true)
@@ -1226,7 +1229,7 @@ const nodeTypeName = (id:any) => {
 }
 const localizedNodeType=(value:any)=>({
   CASE:'案件',CUSTOMER:'客户',ORGANIZATION:'机构',MERCHANT:'商户',ACCOUNT:'账户',
-  WALLET:'钱包',DEVICE:'设备',IP_ADDRESS:'IP地址',IPADDRESS:'IP地址',ADDRESS:'地址',
+  WALLET:'钱包',DEVICE:'设备',IP_ADDRESS:'IP地址',IPADDRESS:'IP地址',ADDRESS:'地址',OTHER_ENTITY:'其他实体',OTHERENTITY:'其他实体',
   EVIDENCE:'证据',EVENT:'事件',INDICATOR_RESULT:'指标结果',INDICATORRESULT:'指标结果',
   BEHAVIOR_PATTERN:'行为模式',BEHAVIORPATTERN:'行为模式',RISK_HYPOTHESIS:'风险假设',
   RISKHYPOTHESIS:'风险假设',INVESTIGATION_HYPOTHESIS:'调查假设',
@@ -1269,16 +1272,17 @@ type SnapshotPlane = 'EVENT_GRAPH'|'REASONING_GRAPH'
 type SnapshotType = {key:string;name:string;icon:string;color:string;plane:SnapshotPlane;planeName:string;formal?:boolean}
 const snapshotTypes:SnapshotType[]=[
   {key:'CASE',name:'案件',icon:'案',color:'#13233a',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'EVENT',name:'事件',icon:'事',color:'#5484bf',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'EVIDENCE',name:'证据',icon:'证',color:'#c8861b',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'CUSTOMER',name:'客户',icon:'客',color:'#3478e5',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'EVENT',name:'事件',icon:'事',color:'#1769e0',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'EVIDENCE',name:'证据',icon:'证',color:'#e9a400',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'CUSTOMER',name:'客户',icon:'客',color:'#00a870',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'ORGANIZATION',name:'机构',icon:'机',color:'#0d9488',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'MERCHANT',name:'商户',icon:'商',color:'#7958c9',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
-  {key:'ACCOUNT',name:'账户',icon:'户',color:'#159877',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'MERCHANT',name:'商户',icon:'商',color:'#059669',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'ACCOUNT',name:'账户',icon:'户',color:'#7c3aed',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'WALLET',name:'钱包',icon:'包',color:'#8b5cf6',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'DEVICE',name:'设备',icon:'设',color:'#0369a1',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'IPADDRESS',name:'IP地址',icon:'IP',color:'#0284c7',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'ADDRESS',name:'地址',icon:'址',color:'#0891b2',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
+  {key:'OTHERENTITY',name:'其他实体',icon:'其',color:'#64748b',plane:'EVENT_GRAPH',planeName:'事件图谱',formal:true},
   {key:'INDICATORRESULT',name:'指标结果',icon:'指',color:'#22a447',plane:'REASONING_GRAPH',planeName:'事理图谱',formal:true},
   {key:'BEHAVIORPATTERN',name:'行为模式',icon:'模',color:'#00a3c7',plane:'REASONING_GRAPH',planeName:'事理图谱',formal:true},
   {key:'RISKHYPOTHESIS',name:'风险假设',icon:'险',color:'#f97316',plane:'REASONING_GRAPH',planeName:'事理图谱',formal:true},
@@ -1291,7 +1295,7 @@ const snapshotCanvasTypeMeta=computed(()=>Object.fromEntries(snapshotTypes.map(i
 ])))
 const normalizeSnapshotType=(value:any)=>String(value||'UNKNOWN').replace(/[^A-Za-z0-9]/g,'').toUpperCase()
 const nodeSnapshotType=(node:any)=>{
-  const raw=normalizeSnapshotType(node?.properties?.canonicalType||node?.properties?.nodeType||node?.type||node?.label)
+  const raw=graphNodeType(node||{})
   return snapshotTypeMap[raw]?raw:'OTHER'
 }
 const visibleSnapshotTypes=ref<Record<string,boolean>>(Object.fromEntries(snapshotTypes.map(item=>[item.key,item.plane==='EVENT_GRAPH'])))
@@ -1332,7 +1336,7 @@ const graphNodeTitle=(node:any)=>{
   const properties=node?.properties||{}, type=nodeSnapshotType(node)
   if(type==='CASE')return String(properties.caseName||node?.name||displayCaseName.value||properties.caseId||'案件')
   if(type==='EVENT')return String(properties.eventName||properties.event_name||properties.displayName||meaningfulEventName({...properties,...node}))
-  return String(properties.displayName||properties.customerName||properties.customer_name||properties.accountNo||properties.account_no||properties.patternName||properties.pattern_name||properties.title||properties.name||node?.name||properties.summary||properties.hypothesis||node?.uid||node?.id||'未命名节点')
+  return String(properties.displayName||properties.customerName||properties.customer_name||properties.accountNo||properties.account_no||properties.account_number||properties.entity_attr_1||properties.patternName||properties.pattern_name||properties.title||properties.name||node?.name||properties.summary||properties.hypothesis||node?.uid||node?.id||'未命名节点')
 }
 const graphNodeRoleName=(node:any)=>({
   INDICATORRESULT:'指标计算结果',
@@ -1374,6 +1378,9 @@ const graphPropertyLabels:Record<string,string>={
   customer_no:'客户号',nationality:'国籍',address:'地址',id_type:'证件类型',
   id_number:'证件号码',occupation_or_industry:'职业或行业',
   account_no:'账号',holder_name:'账户持有人',opened_at:'开户日期',
+  account_number:'账号',account_type:'账户类型',accountType:'账户类型',
+  entity_id:'实体ID',entity_type:'实体类型',entity_attr_1:'实体属性1',
+  entity_attr_2:'实体属性2',entity_attr_3:'实体属性3',entity_attr_4:'实体属性4',
   card_no:'卡号',card_type:'卡类型',event_name:'事件名称',event_type:'事件类型',
   event_time:'事件时间',event_text:'事件原文',started_at:'开始时间',ended_at:'结束时间',
   amount:'金额',channel:'渠道',location:'地点',status:'状态',
@@ -1410,13 +1417,14 @@ const graphPropertyKeysByType:Record<string,string[]>={
   EVENT:['eventName','event_name','eventType','event_type','eventTime','event_time','started_at','ended_at','amount','channel','location','riskLevel','risk_level','status','summary','description'],
   EVIDENCE:['name','summary','evidenceSummary','source','evidenceClass'],
   CUSTOMER:['name','customerNo','customer_no','id_type','nationality','address','occupation_or_industry','riskLevel','risk_level'],
-  ACCOUNT:['accountNo','account_no','holderName','holder_name','opened_at','card_no','card_type','riskLevel','risk_level'],
+  ACCOUNT:['accountNo','account_no','account_number','account_type','accountType','holderName','holder_name','opened_at','card_no','card_type','riskLevel','risk_level'],
   ORGANIZATION:['name','address','occupation_or_industry'],
   MERCHANT:['name','address'],
   WALLET:['name','address'],
   DEVICE:['name','description'],
   IPADDRESS:['name','address'],
   ADDRESS:['name','address'],
+  OTHERENTITY:['entity_id','entity_type','entity_attr_1','entity_attr_2','entity_attr_3','entity_attr_4','name','description'],
   INDICATORRESULT:['name','title','summary','confidence','certainty','status'],
   BEHAVIORPATTERN:['name','title','patternCode','pattern_code','pattern_name','pattern_confidence','confidence','certainty','status','summary'],
   RISKHYPOTHESIS:['name','title','hypothesisCode','risk_event_type','risk_confidence','riskLevel','risk_level','confidence','certainty','review_status','status','summary','reason'],
@@ -1441,7 +1449,7 @@ const businessEnumText=(value:any)=>{
     CASE:'案例',EVENT:'事件',TRANSACTION:'交易',EVIDENCE:'证据',
     CUSTOMER:'客户',ACCOUNT:'账户',ORGANIZATION:'机构',MERCHANT:'商户',
     WALLET:'虚拟资产钱包',DEVICE:'设备',IP_ADDRESS:'网络地址',IPADDRESS:'网络地址',
-    ADDRESS:'地址',BEHAVIOR_PATTERN:'行为模式',BEHAVIORPATTERN:'行为模式',
+    ADDRESS:'地址',OTHER_ENTITY:'其他实体',OTHERENTITY:'其他实体',BEHAVIOR_PATTERN:'行为模式',BEHAVIORPATTERN:'行为模式',
     RISK_HYPOTHESIS:'风险假设',RISKHYPOTHESIS:'风险假设',
     INVESTIGATION_HYPOTHESIS:'调查假设',INVESTIGATIONHYPOTHESIS:'调查假设',
     INDICATOR_RESULT:'指标结果',INDICATORRESULT:'指标结果',
@@ -1577,7 +1585,7 @@ const confidenceCalculationText=(row:any,scoreName:string)=>{
 }
 const accountInstanceDisplayName=(account:any)=>{
   const holder=String(account?.holder_name||account?.holderName||'持有人待确认')
-  const accountNo=String(account?.account_no||account?.accountNo||account?.account_hash||'')
+  const accountNo=String(account?.account_no||account?.accountNo||account?.account_number||account?.account_hash||'')
   if(!accountNo)return `待核账户（${holder}，账号未披露）`
   const visible=accountNo.replace(/[^A-Za-z0-9]/g,'')
   const suffix=visible.slice(-4)||'号待核'

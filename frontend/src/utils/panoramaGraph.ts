@@ -1,7 +1,7 @@
 export const graphNodeId = (node: any): string => String(node.id ?? node.uid ?? '')
-export const graphNodeType = (node: any): string => String(node.visualType || node.label || node.properties?.nodeType || node.type || 'OTHER').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+export const graphNodeType = (node: any): string => String(node.visualType || node.properties?.canonicalType || node.properties?.nodeType || node.type || node.label || 'OTHER').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
 export const graphCaseKey = (node: any): string => String(node.visualCaseId || node.properties?.caseId || node.caseId || '__unassigned__')
-export const graphNodeName = (node: any): string => String(node.visualLabel || node.name || node.properties?.displayName || node.properties?.caseName || node.properties?.eventName || node.properties?.name || node.properties?.accountNo || graphNodeId(node))
+export const graphNodeName = (node: any): string => String(node.visualLabel || node.name || node.properties?.displayName || node.properties?.caseName || node.properties?.eventName || node.properties?.name || node.properties?.accountNo || node.properties?.account_no || node.properties?.account_number || node.properties?.entity_attr_1 || node.entity_attr_1 || node.properties?.title || node.properties?.summary || node.properties?.accountHash || node.properties?.caseId || graphNodeId(node))
 const relationNames: Record<string, string> = {
   RELATES_TO: '关联', HAS_EVENT: '包含事件', INVOLVES: '涉及', INVOLVES_CUSTOMER: '涉及客户', INVOLVES_ACCOUNT: '涉及账户',
   HAS_ACCOUNT: '持有账户', OWNS: '持有', TRANSFER: '转账', TRANSFER_TO: '转账至',

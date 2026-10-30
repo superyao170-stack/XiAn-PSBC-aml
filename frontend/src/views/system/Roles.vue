@@ -8,26 +8,20 @@
       </el-button>
     </div>
     <el-card>
-      <el-table :data="roles" border class="adaptive-list-table" table-layout="fixed">
+      <el-table :data="roles" border class="adaptive-list-table roles-table" table-layout="fixed">
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="roleCode" label="角色编码" />
-        <el-table-column prop="roleName" label="角色名称" />
-        <el-table-column prop="description" label="描述" />
-        <el-table-column label="关联用户" width="100">
+        <el-table-column prop="roleCode" label="角色编码" min-width="160" />
+        <el-table-column prop="roleName" label="角色名称" min-width="200" />
+        <el-table-column prop="description" label="描述" min-width="280" class-name="description-column" />
+        <el-table-column label="关联用户" min-width="120">
           <template #default="{ row }">{{ userCount(row.roleCode) }}</template>
-        </el-table-column>
-        <el-table-column prop="menus" label="业务菜单" min-width="220">
-          <template #default="{ row }"><el-tag v-for="menu in row.menus" :key="menu" size="small" type="success">{{ menuLabel(menu) }}</el-tag></template>
-        </el-table-column>
-        <el-table-column prop="permissions" label="权限" width="300">
-          <template #default="{ row }">
-            <el-tag v-for="p in row.permissions" :key="p" size="small">{{ p }}</el-tag>
-          </template>
         </el-table-column>
         <el-table-column label="操作" width="116" fixed="right" align="right" header-align="right" class-name="operation-column">
           <template #default="{ row }">
-            <div class="table-actions"><el-button size="small" @click="openEditModal(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="deleteRole(row)">删除</el-button></div>
+            <div class="table-actions">
+              <el-button size="small" @click="openEditModal(row)">编辑</el-button>
+              <el-button size="small" type="danger" @click="deleteRole(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -129,7 +123,6 @@ const loadRoles = async () => {
   }))
 }
 const userCount=(roleCode:string)=>users.value.filter(user=>user.roleCode===roleCode).length
-const menuLabel=(value:string)=>rootMenus.value.find(menu=>menu.value===value)?.label||value
 
 const deleteRole = async (row: SysRole) => {
   if (userCount(row.roleCode)>0) {
@@ -157,6 +150,7 @@ onMounted(loadRoles)
 <style scoped>
 .roles-page {
   height: 100%;
+  min-width: 0;
 }
 
 .page-header {
@@ -164,5 +158,20 @@ onMounted(loadRoles)
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.roles-table :deep(.description-column .cell) {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  line-height: 24px;
+}
+
+.table-actions {
+  gap: 12px;
+}
+
+.table-actions .el-button + .el-button {
+  margin-left: 0;
 }
 </style>

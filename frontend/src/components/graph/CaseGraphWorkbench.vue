@@ -5,7 +5,7 @@
       <el-autocomplete v-model="searchText" :fetch-suggestions="searchEntities" :prefix-icon="Search" placeholder="搜索本案实体" aria-label="搜索本案实体" clearable highlight-first-item @select="searchSelect">
         <template #default="{ item }"><div class="case-search-result"><i :style="{ background: typeMeta[graphNodeType(item.node)]?.color }"></i><span>{{ item.value }}</span></div></template>
       </el-autocomplete>
-      <div class="graph-actions"><button :class="{ active: focusOnly }" :aria-pressed="focusOnly" :disabled="!selectedNode" @click="focusOnly = !focusOnly">只看选中路径</button><button title="重新布局" aria-label="重新布局" @click="canvas?.resetLayout()"><el-icon><Refresh /></el-icon></button><button title="适应画布" aria-label="适应画布" @click="canvas?.fitView()"><el-icon><Aim /></el-icon></button><button title="全屏图谱" aria-label="全屏图谱" @click="toggleFullscreen"><el-icon><FullScreen /></el-icon></button><el-button type="primary" size="small" :disabled="!nodes.length" @click="canvas?.exportSvg()">导出图谱</el-button></div>
+      <div class="graph-actions"><button :class="{ active: focusOnly }" :aria-pressed="focusOnly" :disabled="!selectedNode" @click="focusOnly = !focusOnly">只看选中路径</button><button title="重新布局" aria-label="重新布局" @click="canvas?.resetLayout()"><el-icon><Refresh /></el-icon></button><button title="适应画布" aria-label="适应画布" @click="canvas?.fitView()"><el-icon><Aim /></el-icon></button><button title="全屏图谱" aria-label="全屏图谱" @click="toggleFullscreen"><el-icon><FullScreen /></el-icon></button><el-button type="primary" size="small" :disabled="!nodes.length" @click="canvas?.exportImage()">导出图谱</el-button></div>
     </header>
     <div class="case-graph-legend"><slot name="legend" /></div>
     <div class="case-graph-body">

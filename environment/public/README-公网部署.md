@@ -4,7 +4,7 @@
 
 ## 发布流程
 
-1. 在本仓库根目录执行 `bash environment/public/build-release.sh` 生成发布包。
+1. 安装 JDK 17，在本仓库根目录执行 `bash environment/public/build-release.sh` 生成发布包。脚本会检查 `JAVA_HOME` 是否指向 Java 17。
 2. 将 `artifacts/bankgraph-public-release.tar.gz` 上传并解压到服务器的 `/www/wwwroot/bankgraph`。
 3. 复制 `environment/baota/bankgraph.env.example` 为 `environment/config/.env.production`，至少替换数据库密码、TuGraph 密码和 `JWT_SECRET`。密钥可用 `openssl rand -base64 64` 生成。
 4. 按 `environment/baota/README-宝塔部署.md` 初始化基础设施并启动后端。

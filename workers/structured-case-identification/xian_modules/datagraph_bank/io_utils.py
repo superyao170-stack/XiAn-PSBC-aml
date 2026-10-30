@@ -14,6 +14,8 @@ from typing import Any, Callable, Dict, Iterable, Optional
 
 from pydantic import BaseModel
 
+from datagraph_bank.input_normalization import normalize_case_entities
+
 
 PRODUCTION_CSV_FIELDS = ("basic_info", "customers", "analysis_texts")
 ANALYSIS_GENERATION_CSV_FIELDS = (
@@ -145,6 +147,7 @@ def _load_case_directory(input_dir: Path) -> Dict[str, Any]:
         "input_dir": str(input_dir),
         **loaded,
     }
+    state = normalize_case_entities(state, str(input_dir))
     _validate_case_input(state, input_dir)
     return state
 
@@ -223,6 +226,7 @@ def _load_complete_case_payload(
     }
     if input_file is not None:
         state["input_file"] = input_file
+    state = normalize_case_entities(state, str(source))
     _validate_case_input(state, source)
     return state
 

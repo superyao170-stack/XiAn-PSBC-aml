@@ -163,7 +163,7 @@ const getPathName = (path: string) => {
     system: '系统管理',
     roles: '角色管理',
     menus: '菜单管理',
-    indicators: '指标管理',
+    indicators: '规则管理',
     'case-graph': '案例图谱'
   }
   return map[path] || path
@@ -217,7 +217,7 @@ const normalizeBusinessMenu = (menu: any): any => {
     '/system/roles': '角色管理',
     '/system/menus': '菜单管理',
     '/system/event-metadata': '事件元数据管理',
-    '/system/indicators': '指标管理',
+    '/system/indicators': '规则管理',
     '/system/audit-logs': '审计日志'
   }
   return {
@@ -250,7 +250,7 @@ const defaultMenus = [
     { id: 91, parentId: 90, menuName: '角色管理', path: '/system/roles', children: [] },
     { id: 92, parentId: 90, menuName: '菜单管理', path: '/system/menus', children: [] },
     { id: 93, parentId: 90, menuName: '事件元数据管理', path: '/system/event-metadata', children: [] },
-    { id: 94, parentId: 90, menuName: '指标管理', path: '/system/indicators', children: [] },
+    { id: 94, parentId: 90, menuName: '规则管理', path: '/system/indicators', children: [] },
     { id: 95, parentId: 90, menuName: '审计日志', path: '/system/audit-logs', children: [] }
   ]}
 ]

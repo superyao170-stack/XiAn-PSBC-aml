@@ -21,7 +21,7 @@ import java.util.Set;
 final class CoreChainGraphValidator {
     private static final Set<String> INSTANCE_NODE_TYPES = Set.of(
             "CASE", "CUSTOMER", "ORGANIZATION", "MERCHANT", "ACCOUNT", "WALLET",
-            "DEVICE", "IP_ADDRESS", "ADDRESS", "EVIDENCE", "EVENT",
+            "DEVICE", "IP_ADDRESS", "ADDRESS", "OTHER_ENTITY", "EVIDENCE", "EVENT",
             "INDICATOR_RESULT", "BEHAVIOR_PATTERN", "RISK_HYPOTHESIS",
             "INVESTIGATION_HYPOTHESIS");
 
@@ -162,8 +162,13 @@ final class CoreChainGraphValidator {
     }
 
     private boolean requiresEventReachability(Map<String, Object> node) {
+        // Uploaded framework accounts and other entities remain inspectable
+        // through their case scope even when extraction found no event role.
+        if (Set.of("ACCOUNT", "OTHER_ENTITY").contains(canonicalType(node))
+                && node.get("properties") instanceof Map<?,?> properties
+                && "STRUCTURED_GRAPH_SNAPSHOT".equals(properties.get("source"))) return false;
         return Set.of("CUSTOMER", "ORGANIZATION", "MERCHANT", "ACCOUNT", "WALLET",
-                "DEVICE", "IP_ADDRESS", "ADDRESS", "EVIDENCE").contains(canonicalType(node));
+                "DEVICE", "IP_ADDRESS", "ADDRESS", "OTHER_ENTITY", "EVIDENCE").contains(canonicalType(node));
     }
 
     private String canonicalType(Map<String, Object> node) {

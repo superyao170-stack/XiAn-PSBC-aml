@@ -2419,7 +2419,7 @@
     },
     "/api/v1/analysis/structured-case-batch-file": {
       "post": {
-        "description": "上传一个 CSV 或 XLSX（最大 100MB），服务端校验后返回 uploadToken、案例数和校验结果。",
+        "description": "上传一个 CSV 或 XLSX（最大 100MB），服务端校验后返回 uploadToken、案例数和校验结果。NEW 必填列为 basic_info、customers、transaction_features，可选列为 accounts、other_entity（兼容 other_entities）；可选列内容与单案例一致，为 JSON 数组，可留空或填写 []。",
         "operationId": "uploadStructuredCaseBatchFile",
         "parameters": [
           {
@@ -2476,7 +2476,7 @@
     },
     "/api/v1/analysis/structured-case-files": {
       "post": {
-        "description": "上传后返回 `uploadToken`，供“新建上传任务”使用。单案例必须包含\n`basic_info.json` 与 `customers.json`；`accounts.json` 和 `other_entities.json` 可选。\n\n- NEW：系统生成可疑报告，禁止上传 analysis_texts.json；\n- HISTORICAL：复用历史可疑报告，必须上传 analysis_texts.json；\n- 单个文件及全部文件合计均不得超过 100MB。\n",
+        "description": "上传后返回 `uploadToken`，供“新建上传任务”使用。单案例必须包含\n`basic_info.json` 与 `customers.json`；`accounts.json` 和 `other_entities.json` 可选。\n\n- NEW：必须上传 transaction_features.json（顶层 JSON 对象，若包含非空 case_id，须与 basic_info.json 一致），系统生成可疑报告，禁止上传 analysis_texts.json；\n- HISTORICAL：复用历史可疑报告，必须上传 analysis_texts.json，不接收 transaction_features.json；\n- 单个文件及全部文件合计均不得超过 100MB。\n",
         "operationId": "uploadStructuredCaseFile",
         "parameters": [
           {
@@ -2521,6 +2521,11 @@
                   },
                   "otherEntities": {
                     "description": "other_entities.json；可选其他实体数组",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "transactionFeatures": {
+                    "description": "transaction_features.json；仅 NEW 必传，顶层 JSON 对象；非空 case_id 必须与 basic_info.json 一致",
                     "format": "binary",
                     "type": "string"
                   }
@@ -6703,7 +6708,7 @@
   "servers": [
     {
       "description": "Generated server url",
-      "url": "http://localhost:3030"
+      "url": "http://localhost:3032"
     }
   ],
   "tags": [

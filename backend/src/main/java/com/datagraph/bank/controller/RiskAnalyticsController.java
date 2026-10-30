@@ -448,6 +448,8 @@ public class RiskAnalyticsController {
     public CommonResult<Map<String, Object>> execute(@RequestBody RunRequest request) {
         if (request.runType() == null || request.payload() == null)
             return CommonResult.error(400, "runType and payload are required");
+        if ("COLLABORATIVE_AML".equalsIgnoreCase(request.runType()))
+            currentUser.requireAnyRole("sadmin");
         String bankCode = currentUser.scopedBankCode(request.bankCode());
         String runId = "ARUN-" + UUID.randomUUID();
         String snapshotId = "ASNAP-" + UUID.randomUUID();
@@ -707,6 +709,9 @@ public class RiskAnalyticsController {
     private void persistArtifacts(String runId, String bankCode, String scenarioCode,
                                   String runType, JsonNode result) {
         switch (runType) {
+            case "COLLABORATIVE_AML" -> persistArtifactArray(
+                    runId, bankCode, scenarioCode, "CSGM_CANDIDATE",
+                    result.path("candidates"), "candidateId", false);
             case "EVENT_CHAIN" -> {
                 persistArtifactArray(runId, bankCode, scenarioCode, "EVENT_CHAIN_TEMPLATE",
                         result.path("templates"), "templateId", false);

@@ -127,7 +127,7 @@ class BatchRunResult:
 class BankCaseWorkflow:
     """Run structured, unstructured, event, relationship and merge nodes."""
 
-    FINGERPRINT_VERSION = "bank-case-workflow-v3"
+    FINGERPRINT_VERSION = "bank-case-workflow-v4-nested-entities"
     CASE_INPUT_FILE_NAMES = (
         "basic_info.json",
         "customers.json",

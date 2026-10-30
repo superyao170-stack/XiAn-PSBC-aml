@@ -37,6 +37,34 @@ class AnalysisWorkerServiceTest {
     }
 
     @Test
+    void uploadedNewCaseKeepsOptionalEntitiesInSourcePayload() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        var result = mapper.readTree("""
+                {
+                  "caseId":"CASE-BATCH-OPTIONAL",
+                  "recognitionMode":"NEW",
+                  "rawRecord":{
+                    "basic_info":{"case_id":"CASE-BATCH-OPTIONAL"},
+                    "customers":[{"entity_id":"C-1"}],
+                    "transaction_features":{"transactions":[{"transaction_id":"TX-1"}]},
+                    "accounts":[{"entity_id":"A-1","开户信息":{"银行":"测试银行"}}],
+                    "other_entities":[{"entity_id":"E-1","entity_type":"商户","属性":{"行业":"零售"}}]
+                  }
+                }
+                """);
+
+        assertTrue(service.persistXiAnStructuredCase(Map.of(
+                "job_id", "JOB-BATCH-OPTIONAL", "job_type", "STRUCTURED", "bank_code", "B1",
+                "workspace_id", 1L, "batch_id", 12L, "scenario_code", "AML"), result));
+
+        var sourcePayload = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).update(contains("INSERT INTO case_processing_pool"),
+                eq("CASE-BATCH-OPTIONAL"), eq("JOB-BATCH-OPTIONAL"), eq("B1"), eq("AML"),
+                eq("NEW"), sourcePayload.capture());
+        assertEquals(result.path("rawRecord"), mapper.readTree(sourcePayload.getValue()));
+    }
+
+    @Test
     void completedHistoricalCaseIsPersistedForApprovalWithGraphSnapshotAndJobLineage() throws Exception {
         when(jdbc.queryForList(contains("SELECT bank_code FROM cf_risk_case"),
                 eq(String.class), eq("CASE-XI-1"))).thenReturn(List.of());

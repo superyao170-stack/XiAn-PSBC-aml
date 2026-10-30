@@ -104,6 +104,29 @@ class CoreChainGraphValidatorTest {
         assertTrue(issues.stream().anyMatch(issue -> "CC_NODE_003".equals(issue.get("code"))));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void retainsUploadedAccountsAndOtherEntitiesWithCaseScopeWithoutInventingEventRoles() {
+        var account = typedNode("ACCOUNT-1", "ACCOUNT");
+        var entity = typedNode("ENTITY-1", "OTHER_ENTITY");
+        ((Map<String,Object>) account.get("properties")).put("source", "STRUCTURED_GRAPH_SNAPSHOT");
+        ((Map<String,Object>) entity.get("properties")).put("source", "STRUCTURED_GRAPH_SNAPSHOT");
+        List<Map<String,Object>> nodes = new ArrayList<>(List.of(
+                typedNode("CASE-1", "CASE"), account, entity));
+        List<Map<String,Object>> edges = new ArrayList<>(List.of(
+                edge("CASE-1", "INVOLVES_ASSET", "ACCOUNT-1"),
+                edge("CASE-1", "INVOLVES_ENTITY", "ENTITY-1")));
+        List<Map<String,Object>> issues = new ArrayList<>();
+
+        var result = validator.close("CASE-1", nodes, edges, issues);
+
+        assertEquals(3, nodes.size());
+        assertEquals(2, edges.size());
+        assertEquals(0, result.semanticOrphanNodeCount());
+        assertEquals(0, result.instanceContractViolationCount());
+        assertTrue(issues.isEmpty());
+    }
+
     private Map<String, Object> node(String id) {
         String type = id.startsWith("CASE") ? "CASE"
                 : id.startsWith("EVENT") ? "EVENT"

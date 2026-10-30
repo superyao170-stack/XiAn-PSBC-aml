@@ -16,13 +16,15 @@
       </div>
     </transition>
     <div v-if="loading" class="g6-loading"><span></span>图谱布局计算中</div>
+    <div v-else-if="renderError" class="g6-empty">图谱加载失败，请刷新重试</div>
     <div v-else-if="!nodes.length" class="g6-empty">暂无可展示的图谱数据</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { CanvasEvent, EdgeEvent, Graph, GraphEvent, NodeEvent } from '@antv/g6'
+import type { Graph as G6Graph } from '@antv/g6'
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { graphNodeName, graphNodeType } from '@/utils/panoramaGraph'
 
 export interface G6TypeMeta {
   name: string
@@ -54,6 +56,7 @@ const emit = defineEmits<{
 
 const container = ref<HTMLElement>()
 const loading = ref(false)
+const renderError = ref(false)
 const tooltip = reactive({
   visible: false,
   x: 0,
@@ -65,11 +68,16 @@ const tooltip = reactive({
   attributes: [] as Array<{ key: string; value: string }>
 })
 
-let graph: Graph | null = null
+let graph: G6Graph | null = null
+let g6Module: typeof import('@antv/g6') | null = null
 let resizeObserver: ResizeObserver | null = null
 let renderVersion = 0
-let pendingLayoutFit = false
+let renderPromise: Promise<void> = Promise.resolve()
+let disposed = false
 let lastObservedWidth = 0
+let lastObservedHeight = 0
+let selectedNodeId = ''
+let selectedEdge: any = null
 const rawNodes = new Map<string, any>()
 const rawEdges = new Map<string, any>()
 const edgeEndpoints = new Map<string, { source: string; target: string }>()
@@ -95,6 +103,9 @@ const tooltipFieldLabels: Record<string, string> = {
   amount: '金额', currency: '币种', riskLevel: '风险等级', risk_level: '风险等级',
   customerNo: '客户号', customer_no: '客户号', idType: '证件类型', id_type: '证件类型',
   accountNo: '账号', account_no: '账号', holderName: '账户持有人', holder_name: '账户持有人',
+  account_number: '账号', account_type: '账户类型', accountType: '账户类型',
+  entity_id: '实体ID', entity_type: '实体类型', entity_attr_1: '实体属性1',
+  entity_attr_2: '实体属性2', entity_attr_3: '实体属性3', entity_attr_4: '实体属性4',
   address: '地址', nationality: '国籍', openedAt: '开户日期', opened_at: '开户日期',
   organizationName: '机构名称', merchantName: '商户名称',
   deviceName: '设备名称', deviceType: '设备类型', device_type: '设备类型',
@@ -120,26 +131,24 @@ const nodeTooltipFieldsByType: Record<string, string[]> = {
   EVENT: [...commonNameFields, 'eventName', 'event_name', 'eventType', 'event_type', 'eventTime', 'event_time', 'startedAt', 'started_at', 'endedAt', 'ended_at', 'amount', 'currency', 'riskLevel', 'risk_level', 'summary', 'description', 'dataSource', 'data_source'],
   EVIDENCE: [...commonNameFields, 'type', 'summary', 'proves', 'source'],
   CUSTOMER: [...commonNameFields, 'customerNo', 'customer_no', 'idType', 'id_type', 'nationality', 'address', 'riskLevel', 'risk_level'],
-  ACCOUNT: [...commonNameFields, 'accountNo', 'account_no', 'holderName', 'holder_name', 'type', 'openedAt', 'opened_at', 'riskLevel', 'risk_level'],
+  ACCOUNT: [...commonNameFields, 'accountNo', 'account_no', 'account_number', 'account_type', 'accountType', 'holderName', 'holder_name', 'type', 'openedAt', 'opened_at', 'riskLevel', 'risk_level'],
   ORGANIZATION: [...commonNameFields, 'organizationName', 'type', 'address'],
   MERCHANT: [...commonNameFields, 'merchantName', 'type', 'address'],
   WALLET: [...commonNameFields, 'walletAddress', 'wallet_address', 'type'],
   DEVICE: [...commonNameFields, 'deviceName', 'deviceType', 'device_type'],
   IPADDRESS: [...commonNameFields, 'ipAddress', 'ip_address', 'address'],
   ADDRESS: [...commonNameFields, 'address', 'type'],
+  OTHERENTITY: [...commonNameFields, 'entity_id', 'entity_type', 'entity_attr_1', 'entity_attr_2', 'entity_attr_3', 'entity_attr_4', 'description'],
   INDICATORRESULT: [...commonNameFields, 'result', 'value', 'threshold', 'confidence', 'status', 'summary'],
   BEHAVIORPATTERN: [...commonNameFields, 'patternCode', 'confidence', 'certainty', 'status', 'summary'],
   RISKHYPOTHESIS: [...commonNameFields, 'hypothesisCode', 'riskLevel', 'risk_level', 'confidence', 'certainty', 'status', 'summary'],
   INVESTIGATIONHYPOTHESIS: [...commonNameFields, 'hypothesisCode', 'confidence', 'certainty', 'status', 'summary']
 }
 
-const normalizeType = (value: any) => String(value || 'OTHER').replace(/[\s_-]/g, '').toUpperCase()
 const nodeId = (node: any) => String(node.id ?? node.uid ?? '')
 const sourceId = (edge: any) => String(edge.source ?? edge.from ?? edge.start ?? '')
 const targetId = (edge: any) => String(edge.target ?? edge.to ?? edge.end ?? '')
-const nodeType = (node: any) => normalizeType(
-  node.visualType || node.properties?.canonicalType || node.properties?.nodeType || node.type || node.label
-)
+const nodeType = graphNodeType
 const metaFor = (node: any): G6TypeMeta => {
   const type = nodeType(node)
   return props.typeMeta[type] || props.typeMeta.OTHER || { name: '其他节点', color: '#64748b', icon: '其' }
@@ -148,12 +157,7 @@ const nodePlane=(node:any)=>{
   const value=String(node.visualPlane||metaFor(node).planeName||'EVENT_GRAPH')
   return value==='REASONING_GRAPH'||value==='事理图谱'?'REASONING_GRAPH':'EVENT_GRAPH'
 }
-const nodeTitle = (node: any) => String(
-  node.visualLabel || node.name || node.properties?.caseName || node.properties?.caseId ||
-  node.properties?.eventName || node.properties?.name || node.properties?.accountNo ||
-  node.properties?.accountHash || node.properties?.title || node.properties?.summary ||
-  node.uid || node.id || '未命名节点'
-)
+const nodeTitle = (node: any) => graphNodeName(node) || '未命名节点'
 const shorten = (value: string, max = 22) => Array.from(value).length > max ? `${Array.from(value).slice(0, max).join('')}...` : value
 const abbreviate = (value: any) => {
   const chars=Array.from(String(value || ''))
@@ -372,20 +376,21 @@ function graphData() {
     }
   }).filter(node => node.id)
   const ids = new Set(nodes.map(node => node.id))
-  const edges:any[] = props.edges.map((raw, index) => {
+  const edges:any[] = props.edges.flatMap((raw, index) => {
     const source = sourceId(raw)
     const target = targetId(raw)
+    if (!source || !target || !ids.has(source) || !ids.has(target)) return []
     const label = edgeDisplayName(raw)
     const id = `${String(raw.id ?? raw.uid ?? 'edge')}::${source}→${target}::${label}::${index}`
     rawEdges.set(id, raw)
     edgeEndpoints.set(id, { source, target })
-    return {
+    return [{
       id,
       source,
       target,
       data: { raw, label, color: edgeColor(label), virtual: false }
-    }
-  }).filter(edge => edge.source && edge.target && ids.has(edge.source) && ids.has(edge.target))
+    }]
+  })
   return { nodes, edges }
 }
 
@@ -494,7 +499,8 @@ function graphOptions() {
 }
 
 function bindEvents() {
-  if (!graph) return
+  if (!graph || !g6Module) return
+  const { CanvasEvent, EdgeEvent, NodeEvent } = g6Module
   const moveTooltip = (event: any, avoidNode = false) => {
     const bounds = container.value?.getBoundingClientRect()
     const client = event.client || { x: 0, y: 0 }
@@ -530,7 +536,8 @@ function bindEvents() {
     const id = String(event.target.id)
     const raw = rawNodes.get(id)
     if (!raw) return
-    await highlightNeighborhood(id)
+    await setSelection(id)
+    if (disposed) return
     emit('selectEdge', null)
     emit('select', raw)
   })
@@ -563,35 +570,23 @@ function bindEvents() {
   graph.on(EdgeEvent.CLICK, async (event: any) => {
     const id = String(event.target.id)
     const raw = rawEdges.get(id)
-    const endpoints = edgeEndpoints.get(id)
-    if (!raw || !endpoints) return
-    const states: Record<string, string[]> = {}
-    rawNodes.forEach((_, nodeId) => {
-      states[nodeId] = nodeId === endpoints.source || nodeId === endpoints.target
-        ? ['active'] : ['inactive']
-    })
-    edgeEndpoints.forEach((_, edgeId) => {
-      states[edgeId] = edgeId === id ? ['active'] : ['inactive']
-    })
-    await graph?.setElementState(states, false)
+    if (!raw) return
+    await setSelection('', raw)
+    if (disposed) return
     emit('select', null)
     emit('selectEdge', raw)
   })
   graph.on(CanvasEvent.CLICK, async () => {
     tooltip.visible = false
     await clearSelection()
+    if (disposed) return
     emit('select', null)
     emit('selectEdge', null)
   })
-  graph.on(GraphEvent.AFTER_LAYOUT, async () => {
-    if (!pendingLayoutFit || !graph || !props.nodes.length) return
-    pendingLayoutFit = false
-    await fitView(260)
-  })
 }
 
-async function highlightNeighborhood(id: string) {
-  if (!graph || !rawNodes.has(id)) return
+async function highlightNeighborhood(current: G6Graph, id: string) {
+  if (!isCurrentGraph(current) || !rawNodes.has(id)) return
   const relatedNodes = new Set<string>([id])
   const relatedEdges = new Set<string>()
   const adjacency = new Map<string, Array<{ nodeId: string; edgeId: string }>>()
@@ -642,92 +637,205 @@ async function highlightNeighborhood(id: string) {
   edgeEndpoints.forEach((_, edgeId) => {
     states[edgeId] = relatedEdges.has(edgeId) ? ['active'] : ['inactive']
   })
-  await graph.setElementState(states, false)
+  await current.setElementState(states, false)
+}
+
+function isCurrentGraph(current: G6Graph) {
+  return !disposed && graph === current && !current.destroyed
+}
+
+async function currentGraph() {
+  // A parent may enable a filtered node and focus it in the same Vue update.
+  await nextTick()
+  let pending: Promise<void>
+  do {
+    pending = renderPromise
+    await pending
+  } while (!disposed && pending !== renderPromise)
+  return graph && isCurrentGraph(graph) ? graph : null
+}
+
+async function useGraph<T>(action: (current: G6Graph) => Promise<T>, fallback: T): Promise<T> {
+  const current = await currentGraph()
+  if (!current) return fallback
+  try {
+    return await action(current)
+  } catch (error) {
+    if (isCurrentGraph(current)) console.error('[G6GraphCanvas] 图谱操作失败', error)
+    return fallback
+  }
+}
+
+const rawEdgeKey = (edge: any) => `${String(edge.id ?? edge.uid ?? edge.properties?.graphId ?? '')}|${sourceId(edge)}|${targetId(edge)}|${edgeDisplayName(edge)}`
+async function applySelection(current: G6Graph) {
+  if (!isCurrentGraph(current)) return
+  const selectedEntry = selectedEdge && [...rawEdges.entries()].find(([, raw]) => raw === selectedEdge || rawEdgeKey(raw) === rawEdgeKey(selectedEdge))
+  const endpoints = selectedEntry && edgeEndpoints.get(selectedEntry[0])
+  if (selectedEntry && endpoints) {
+    const states: Record<string, string[]> = {}
+    rawNodes.forEach((_, id) => { states[id] = id === endpoints.source || id === endpoints.target ? ['active'] : ['inactive'] })
+    edgeEndpoints.forEach((_, id) => { states[id] = id === selectedEntry[0] ? ['active'] : ['inactive'] })
+    await current.setElementState(states, false)
+  } else if (selectedNodeId && rawNodes.has(selectedNodeId)) {
+    await highlightNeighborhood(current, selectedNodeId)
+  } else {
+    const states: Record<string, string[]> = {}
+    rawNodes.forEach((_, id) => { states[id] = ['normal'] })
+    edgeEndpoints.forEach((_, id) => { states[id] = ['normal'] })
+    await current.setElementState(states, false)
+  }
+}
+
+async function setSelection(id: string, edge?: any) {
+  selectedNodeId = String(id || '')
+  selectedEdge = edge || null
+  await useGraph(applySelection, undefined)
 }
 
 async function clearSelection() {
-  if (!graph) return
-  const states: Record<string, string[]> = {}
-  rawNodes.forEach((_, id) => { states[id] = ['normal'] })
-  edgeEndpoints.forEach((_, id) => { states[id] = ['normal'] })
-  await graph.setElementState(states, false)
+  await setSelection('')
 }
 
-async function render() {
-  const version = ++renderVersion
+const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+async function fitGraph(current: G6Graph, duration: number, version = renderVersion) {
   await nextTick()
-  if (!container.value) return
+  await nextFrame()
+  await nextFrame()
+  if (!isCurrentGraph(current) || version !== renderVersion || !container.value || !props.nodes.length
+    || container.value.clientWidth < 2 || container.value.clientHeight < 2) return
+  current.resize()
+  current.setZoomRange([0.01, 10])
+  await current.fitView({ when: 'always', direction: 'both' }, { duration })
+  if (!isCurrentGraph(current) || version !== renderVersion) return
+  const fitZoom = current.getZoom()
+  current.setZoomRange([fitZoom * 0.6, fitZoom * 1.5])
+}
+
+function render() {
+  if (disposed) return renderPromise
+  const version = ++renderVersion
   loading.value = true
-  tooltip.visible = false
-  try {
+  renderError.value = false
+  // Serialize G6 mutations, and skip queued updates superseded by newer props.
+  renderPromise = renderPromise.then(async () => {
+    await nextTick()
+    if (disposed || version !== renderVersion || !container.value) return
+    tooltip.visible = false
     if (!props.nodes.length) {
-      if (graph) {
-        graph.setData({ nodes: [], edges: [] })
-        await graph.draw()
+      rawNodes.clear()
+      rawEdges.clear()
+      edgeEndpoints.clear()
+      const current = graph
+      if (current && isCurrentGraph(current)) {
+        current.setData({ nodes: [], edges: [] })
+        await current.draw()
       }
+      if (!disposed && version === renderVersion) emit('ready')
       return
     }
     if (!graph) {
-      graph = new Graph(graphOptions() as any)
+      g6Module ||= await import('@antv/g6')
+      if (disposed || version !== renderVersion || !container.value) return
+      graph = new g6Module.Graph(graphOptions() as any)
       bindEvents()
-      pendingLayoutFit = true
-      await graph.render()
-      emit('ready')
     } else {
       graph.setOptions(graphOptions() as any)
-      pendingLayoutFit = true
-      await graph.render()
     }
-    if (version === renderVersion && props.nodes.length) {
-      await fitView(320)
+    const current = graph
+    await current.render()
+    if (!isCurrentGraph(current) || version !== renderVersion) return
+    await fitGraph(current, 0, version)
+    if (!isCurrentGraph(current) || version !== renderVersion) return
+    await applySelection(current)
+    if (isCurrentGraph(current) && version === renderVersion) emit('ready')
+  }).catch(error => {
+    if (!disposed && version === renderVersion) {
+      renderError.value = true
+      console.error('[G6GraphCanvas] 图谱渲染失败', error)
     }
-  } finally {
-    if (version === renderVersion) loading.value = false
-  }
+  }).finally(() => {
+    if (!disposed && version === renderVersion) loading.value = false
+  })
+  return renderPromise
 }
 
 async function zoom(ratio: number) {
-  await graph?.zoomBy(ratio, { duration: 180 })
+  await useGraph(current => current.zoomBy(ratio, { duration: 180 }), undefined)
 }
-const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
 async function fitView(duration = 260) {
-  if (!graph || !container.value || !props.nodes.length) return
-  await nextTick()
-  await nextFrame()
-  await nextFrame()
-  graph.resize()
-  // Release the previous dynamic minimum before recomputing the fit zoom.
-  graph.setZoomRange([0.01, 10])
-  await graph.fitView({ when: 'always', direction: 'both' }, { duration })
-  const fitZoom = graph.getZoom()
-  // “适应画布”为100%正常显示比例：允许缩小到60%，最大仅放大到150%。
-  graph.setZoomRange([fitZoom * 0.6, fitZoom * 1.5])
+  await useGraph(current => fitGraph(current, duration), undefined)
 }
 async function resetLayout() {
-  if (!graph) return
-  if (props.layout === 'grid') {
-    await render()
-    return
-  }
-  loading.value = true
-  try {
-    graph.setLayout(layoutOptions() as any)
-    pendingLayoutFit = true
-    await graph.layout()
-    await fitView()
-  } finally {
-    loading.value = false
-  }
+  await render()
 }
 async function focusNode(id: string) {
-  if (!graph || !rawNodes.has(String(id))) return false
-  await graph.focusElement(String(id), { duration: 320 })
-  await highlightNeighborhood(String(id))
-  emit('select', rawNodes.get(String(id)) || null)
-  return true
+  return useGraph(async current => {
+    const key = String(id)
+    if (!rawNodes.has(key)) return false
+    const version = renderVersion
+    await current.focusElement(key, { duration: 320 })
+    if (!isCurrentGraph(current) || version !== renderVersion) return false
+    selectedNodeId = key
+    selectedEdge = null
+    await applySelection(current)
+    if (!isCurrentGraph(current)) return false
+    emit('selectEdge', null)
+    emit('select', rawNodes.get(key) || null)
+    return true
+  }, false)
 }
 
-defineExpose({ fitView, resetLayout, focusNode, clearSelection })
+function getViewState() {
+  const current = graph
+  if (!current || !isCurrentGraph(current) || !current.rendered) return { renderer: 'g6', positions: {} }
+  const positions = Object.fromEntries(current.getNodeData().map(node => {
+    const [x, y] = current.getElementPosition(node.id)
+    return [node.id, { x, y }]
+  }))
+  return { renderer: 'g6', positions, viewport: { zoom: current.getZoom(), position: current.getPosition() } }
+}
+async function restoreViewState(state: any) {
+  // The previous SVG renderer used a different coordinate system.
+  if (state?.renderer !== 'g6') return
+  await useGraph(async current => {
+    const version = renderVersion
+    const updates = Object.entries(state.positions || {}).flatMap(([id, point]: [string, any]) =>
+      rawNodes.has(id) && Number.isFinite(point?.x) && Number.isFinite(point?.y)
+        ? [{ id, style: { x: point.x, y: point.y } }] : [])
+    if (updates.length) {
+      current.updateNodeData(updates)
+      await current.draw()
+    }
+    if (!isCurrentGraph(current) || version !== renderVersion) return
+    const zoom = Number(state.viewport?.zoom)
+    const position = state.viewport?.position
+    if (Number.isFinite(zoom) && zoom > 0 && Array.isArray(position) && position.length >= 2 && position.slice(0, 2).every(Number.isFinite)) {
+      const safeZoom = Math.max(0.01, Math.min(10, zoom))
+      const range = current.getZoomRange() || [0.01, 10]
+      current.setZoomRange([Math.min(range[0], safeZoom), Math.max(range[1], safeZoom)])
+      await current.zoomTo(safeZoom, false)
+      if (!isCurrentGraph(current) || version !== renderVersion) return
+      // getPosition uses canvas units; translateBy accepts viewport pixels.
+      const [x, y] = current.getPosition()
+      await current.translateBy([(position[0] - x) * safeZoom, (position[1] - y) * safeZoom], false)
+    } else {
+      await fitGraph(current, 0, version)
+    }
+    if (isCurrentGraph(current) && version === renderVersion) await applySelection(current)
+  }, undefined)
+}
+async function exportImage() {
+  await useGraph(async current => {
+    const dataUrl = await current.toDataURL({ mode: 'overall', type: 'image/png' })
+    if (!isCurrentGraph(current)) return
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = `图谱-${new Date().toISOString().slice(0, 10)}.png`
+    link.click()
+  }, undefined)
+}
+
+defineExpose({ fitView, resetLayout, focusNode, clearSelection, setSelection, getViewState, restoreViewState, exportImage, zoom })
 
 watch(
   [
@@ -739,19 +847,27 @@ watch(
   ],
   render
 )
+watch(() => props.height, async () => {
+  await nextTick()
+  if (graph && isCurrentGraph(graph)) graph.resize()
+})
 onMounted(() => {
-  render()
+  void render()
   if (container.value) {
     resizeObserver = new ResizeObserver(entries => {
       const width = entries[0]?.contentRect.width || 0
-      graph?.resize()
-      if (lastObservedWidth < 2 && width >= 2) void fitView(0)
+      const height = entries[0]?.contentRect.height || 0
+      if (graph && isCurrentGraph(graph)) graph.resize()
+      if (graph?.rendered && !loading.value && (lastObservedWidth < 2 || lastObservedHeight < 2) && width >= 2 && height >= 2) void fitView(0)
       lastObservedWidth = width
+      lastObservedHeight = height
     })
     resizeObserver.observe(container.value)
   }
 })
 onBeforeUnmount(() => {
+  disposed = true
+  renderVersion += 1
   resizeObserver?.disconnect()
   graph?.destroy()
   graph = null

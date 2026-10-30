@@ -6,22 +6,29 @@ release_dir="$(mktemp -d)"
 trap 'rm -rf "$release_dir"' EXIT
 
 cd "$project_root"
-if [[ -z "${JAVA_HOME:-}" && "$(uname -s)" == "Darwin" && -x /usr/libexec/java_home ]]; then
-  resolved_java_home="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
+if [[ -z "${JAVA_HOME:-}" && "$(uname -s)" == "Darwin" ]]; then
+  resolved_java_home=""
+  if [[ -x /usr/libexec/java_home ]]; then
+    resolved_java_home="$(/usr/libexec/java_home -v 17 2>/dev/null || true)"
+  fi
+  if [[ -z "$resolved_java_home" && -x "$HOME/.local/jdks/temurin-17.jdk/Contents/Home/bin/java" ]]; then
+    resolved_java_home="$HOME/.local/jdks/temurin-17.jdk/Contents/Home"
+  fi
   if [[ -n "$resolved_java_home" ]]; then
     export JAVA_HOME="$resolved_java_home"
   fi
 fi
 if [[ -z "${JAVA_HOME:-}" || ! -x "$JAVA_HOME/bin/java" ]]; then
-  echo "未找到 Java 21，请设置 JAVA_HOME 为 JDK 21 后重试。" >&2
+  echo "未找到 Java 17，请设置 JAVA_HOME 为 JDK 17 后重试。" >&2
   exit 1
 fi
-JAVA_VERSION="$($JAVA_HOME/bin/java -version 2>&1 | head -n 1)"
-if [[ ! "$JAVA_VERSION" =~ \"21([.\"]|$) ]]; then
-  echo "当前不是 Java 21：$JAVA_VERSION" >&2
-  echo "请设置 JAVA_HOME 为 JDK 21 后重试。" >&2
+JAVA_VERSION="$("$JAVA_HOME/bin/java" -version 2>&1 | head -n 1)"
+if [[ ! "$JAVA_VERSION" =~ \"17([.\"]|$) ]]; then
+  echo "当前不是 Java 17：$JAVA_VERSION" >&2
+  echo "请设置 JAVA_HOME 为 JDK 17 后重试。" >&2
   exit 1
 fi
+export PATH="$JAVA_HOME/bin:$PATH"
 mvn -f backend/pom.xml clean package
 npm --prefix frontend ci
 npm --prefix frontend run build

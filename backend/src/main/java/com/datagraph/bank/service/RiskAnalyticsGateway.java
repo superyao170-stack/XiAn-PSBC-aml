@@ -38,6 +38,7 @@ public class RiskAnalyticsGateway {
             case "CASE_MATTER_EXPLANATION" -> "/v1/case-matters/explain";
             case "INFERENCE" -> "/v1/inference";
             case "EVALUATION" -> "/v1/evaluations/run";
+            case "COLLABORATIVE_AML" -> "/v1/collaborative-aml/detect";
             default -> throw new IllegalArgumentException("Unsupported analytics run type: " + runType);
         };
         return post(path, payload);
