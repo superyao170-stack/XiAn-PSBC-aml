@@ -12,6 +12,7 @@ export const uploadStructuredCaseFilesApi = (files: {
   basicInfo: File
   customers: File
   recognitionMode: 'NEW' | 'HISTORICAL'
+  transactionFeatures?: File | null
   analysisTexts?: File | null
   accounts?: File | null
   otherEntities?: File | null
@@ -20,6 +21,7 @@ export const uploadStructuredCaseFilesApi = (files: {
   form.append('basicInfo', files.basicInfo)
   form.append('customers', files.customers)
   form.append('recognitionMode', files.recognitionMode)
+  if (files.recognitionMode === 'NEW' && files.transactionFeatures) form.append('transactionFeatures', files.transactionFeatures)
   if (files.analysisTexts) form.append('analysisTexts', files.analysisTexts)
   if (files.accounts) form.append('accounts', files.accounts)
   if (files.otherEntities) form.append('otherEntities', files.otherEntities)

@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:17-jre-jammy
 
 # The named BuildKit context is the verified 4.5.10 distribution, including
 # the Chinese model JAR. Keeping it in the image makes the container offline.

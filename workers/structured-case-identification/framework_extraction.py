@@ -48,6 +48,7 @@ if str(XIAN_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(XIAN_MODULE_ROOT))
 
 from datagraph_bank.workflow import BankCaseWorkflow  # noqa: E402
+from datagraph_bank.input_normalization import normalize_case_entities  # noqa: E402
 from similarity_matching import match_similar_cases  # noqa: E402
 from text_generation import ensure_analysis_text  # noqa: E402
 
@@ -55,6 +56,7 @@ from text_generation import ensure_analysis_text  # noqa: E402
 WORKER_ID = "XI_AN_STRUCTURED_CASE_PIPELINE"
 WORKER_VERSION = "2.8.0-bge-m3-event-rag"
 NEW_BATCH_FIELDS = ("basic_info", "customers", "transaction_features")
+NEW_BATCH_OPTIONAL_FIELDS = ("accounts", "other_entity", "other_entities")
 HISTORICAL_BATCH_FIELDS = ("basic_info", "customers", "analysis_texts")
 HISTORICAL_ENRICHED_BATCH_FIELDS = (
     "basic_info", "customers", "analysis_texts", "accounts", "evidences"
@@ -90,23 +92,56 @@ def _batch_header_error(headers: tuple[str, ...], recognition_mode: str) -> str:
             "当前选择的是反洗钱场景，但文件表头属于反欺诈案例；"
             "请将处理场景切换为反欺诈"
         )
+    if recognition_mode != "HISTORICAL":
+        return (
+            "CSV/XLSX 必须包含字段: " + ", ".join(NEW_BATCH_FIELDS)
+            + "；可选字段: accounts, other_entity（兼容 other_entities），列顺序不限"
+        )
     return "CSV/XLSX 表头必须严格为: " + ", ".join(expected)
 
 
-def _read_json(source: Path, expected_type: type, required: bool) -> Any:
+def _validate_batch_headers(headers: tuple[str, ...], recognition_mode: str) -> None:
+    if recognition_mode == "HISTORICAL":
+        if headers not in HISTORICAL_BATCH_FIELD_ALIASES:
+            raise ValueError(_batch_header_error(headers, recognition_mode))
+        return
+    if headers in {ANTI_FRAUD_NEW_BATCH_FIELDS, ANTI_FRAUD_HISTORICAL_BATCH_FIELDS}:
+        raise ValueError(_batch_header_error(headers, recognition_mode))
+    duplicates = sorted({field for field in headers if headers.count(field) > 1})
+    if duplicates:
+        raise ValueError("CSV/XLSX 表头存在重复字段: " + ", ".join(duplicates))
+    missing = [field for field in NEW_BATCH_FIELDS if field not in headers]
+    unknown = [
+        field for field in headers
+        if field not in NEW_BATCH_FIELDS + NEW_BATCH_OPTIONAL_FIELDS
+    ]
+    if missing or unknown:
+        details = []
+        if missing:
+            details.append("缺少必填字段: " + ", ".join(missing))
+        if unknown:
+            details.append("包含不支持的字段: " + ", ".join(field or "（空表头）" for field in unknown))
+        raise ValueError(_batch_header_error(headers, recognition_mode) + "；" + "；".join(details))
+    if "other_entity" in headers and "other_entities" in headers:
+        raise ValueError("CSV/XLSX 的 other_entity 与 other_entities 为同一字段，不能同时提供")
+
+
+def _read_json(source: Path, expected_type: type | tuple[type, ...], required: bool) -> Any:
     if not source.is_file():
         if required:
             raise ValueError(f"单案例处理缺少 {source.name}")
         return None
     value = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(value, expected_type):
-        expected = "对象" if expected_type is dict else "数组"
+        expected = "对象或数组" if isinstance(expected_type, tuple) else ("对象" if expected_type is dict else "数组")
         raise ValueError(f"{source.name} 顶层必须是 JSON {expected}")
     return value
 
 
-def load_single_case_directory(source: Path) -> dict[str, Any]:
-    """Assemble the original Xi'an case contract from five role-based files."""
+def load_single_case_directory(
+    source: Path, *, require_transaction_features: bool = False
+) -> dict[str, Any]:
+    """Assemble the case contract, retaining the legacy feature-file fallback."""
     if not source.is_dir():
         raise ValueError("上传案例目录不存在")
     basic_info = _read_json(source / "basic_info.json", dict, True)
@@ -123,17 +158,29 @@ def load_single_case_directory(source: Path) -> dict[str, Any]:
     analysis_texts = _read_json(source / "analysis_texts.json", dict, False)
     accounts = _read_json(source / "accounts.json", list, False)
     other_entities = _read_json(source / "other_entities.json", list, False)
+    evidences = _read_json(source / "evidences.json", list, False)
+    transaction_features = _read_json(source / "transaction_features.json", dict, False)
+    if isinstance(transaction_features, dict):
+        feature_case_id = str(transaction_features.get("case_id") or "").strip()
+        if feature_case_id and feature_case_id != str(basic_info["case_id"]).strip():
+            raise ValueError("transaction_features.case_id 与 basic_info.case_id 不一致")
+    if transaction_features is None:
+        transaction_features = _read_json(source / "feature_analysis.json", (dict, list), False)
+    if require_transaction_features and transaction_features is None:
+        raise ValueError("新增单案例必须上传 transaction_features.json")
     record: dict[str, Any] = {
         "basic_info": basic_info,
         "customers": customers,
         "accounts": accounts or [],
         "other_entities": other_entities or [],
+        "evidences": evidences or [],
+        "transaction_features": transaction_features or {},
     }
     if analysis_texts is not None:
         if not any(isinstance(text, str) and text.strip() for text in analysis_texts.values()):
             raise ValueError("analysis_texts.json 至少需要包含一段非空分析文本")
         record["analysis_texts"] = analysis_texts
-    return record
+    return normalize_case_entities(record, str(source))
 
 
 def _decode_batch_json(value: Any, field: str, source: str, expected: type) -> Any:
@@ -147,6 +194,12 @@ def _decode_batch_json(value: Any, field: str, source: str, expected: type) -> A
         expected_name = "对象" if expected is dict else "数组"
         raise ValueError(f"{source} 的 {field} 必须是 JSON {expected_name}")
     return decoded
+
+
+def _decode_optional_batch_entities(value: Any, field: str, source: str) -> list[Any]:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return []
+    return _decode_batch_json(value, field, source, list)
 
 
 def _decode_batch_analysis_texts(
@@ -195,8 +248,11 @@ def _batch_record(values: dict[str, Any], source: str, recognition_mode: str) ->
         "basic_info": basic_info,
         "customers": customers,
         "accounts": (
-            _decode_batch_json(values.get("accounts"), "accounts", source, list)
-            if "accounts" in values else []
+            _decode_optional_batch_entities(values.get("accounts"), "accounts", source)
+            if recognition_mode != "HISTORICAL" else (
+                _decode_batch_json(values.get("accounts"), "accounts", source, list)
+                if "accounts" in values else []
+            )
         ),
         "other_entities": [],
         "evidences": (
@@ -207,6 +263,10 @@ def _batch_record(values: dict[str, Any], source: str, recognition_mode: str) ->
     if recognition_mode == "HISTORICAL":
         record["analysis_texts"] = _decode_batch_analysis_texts(values, source)
     else:
+        other_entities_field = "other_entity" if "other_entity" in values else "other_entities"
+        record["other_entities"] = _decode_optional_batch_entities(
+            values.get(other_entities_field), other_entities_field, source
+        )
         transaction_features = _decode_batch_json(
             values.get("transaction_features"), "transaction_features", source, dict
         )
@@ -216,26 +276,18 @@ def _batch_record(values: dict[str, Any], source: str, recognition_mode: str) ->
                 f"{source} 的 transaction_features.case_id 与 basic_info.case_id 不一致"
             )
         record["transaction_features"] = transaction_features
-    return record
+    return normalize_case_entities(record, source)
 
 
 def load_batch_case_file(source: Path, recognition_mode: str) -> list[dict[str, Any]]:
-    expected_fields = (
-        HISTORICAL_BATCH_FIELDS if recognition_mode == "HISTORICAL" else NEW_BATCH_FIELDS
-    )
     suffix = source.suffix.lower()
     rows: list[tuple[int, dict[str, Any]]] = []
     if suffix == ".csv":
         with source.open("r", encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle)
             headers = tuple(str(name or "").strip() for name in (reader.fieldnames or []))
-            valid_headers = (
-                headers in HISTORICAL_BATCH_FIELD_ALIASES
-                if recognition_mode == "HISTORICAL"
-                else headers == expected_fields
-            )
-            if not valid_headers:
-                raise ValueError(_batch_header_error(headers, recognition_mode))
+            _validate_batch_headers(headers, recognition_mode)
+            reader.fieldnames = list(headers)
             for row_number, row in enumerate(reader, start=2):
                 if row.get(None):
                     raise ValueError(f"CSV 第 {row_number} 行字段数超过表头")
@@ -254,13 +306,7 @@ def load_batch_case_file(source: Path, recognition_mode: str) -> list[dict[str, 
             iterator = sheet.iter_rows(values_only=False)
             header_cells = next(iterator, ())
             headers = tuple(str(cell.value or "").strip() for cell in header_cells)
-            valid_headers = (
-                headers in HISTORICAL_BATCH_FIELD_ALIASES
-                if recognition_mode == "HISTORICAL"
-                else headers == expected_fields
-            )
-            if not valid_headers:
-                raise ValueError(_batch_header_error(headers, recognition_mode))
+            _validate_batch_headers(headers, recognition_mode)
             for row_number, cells in enumerate(iterator, start=2):
                 if any(cell.data_type == "f" for cell in cells):
                     raise ValueError(f"XLSX 第 {row_number} 行不允许使用公式")
@@ -294,6 +340,9 @@ def _directory_sha256(source: Path) -> str:
         "analysis_texts.json",
         "accounts.json",
         "other_entities.json",
+        "evidences.json",
+        "transaction_features.json",
+        "feature_analysis.json",
     ):
         path = source / name
         if not path.is_file():
@@ -374,22 +423,14 @@ def _workflow_input(
     basic_info = _object(record, "basic_info", "basicInfo")
     basic_info.setdefault("case_id", case_id)
     basic_info.setdefault("case_name", case_name)
+    record = normalize_case_entities({**record, "basic_info": basic_info})
     return {
         "basic_info": basic_info,
         "customers": _list(record, "customers", "customer_info", "customerInfo"),
         "accounts": _list(record, "accounts", "account_info", "accountInfo"),
         "other_entities": _list(record, "other_entities", "otherEntities", "entities"),
         "evidences": _list(record, "evidences", "evidence_list", "evidenceList"),
-        "transaction_features": (
-            _object(
-                record,
-                "transaction_features",
-                "transactionFeatures",
-                "feature_analysis",
-                "featureAnalysis",
-                "transactions",
-            )
-        ),
+        "transaction_features": record["transaction_features"],
         "analysis_texts": analysis_texts,
     }
 
@@ -405,7 +446,7 @@ def graph_snapshot(framework: dict[str, Any]) -> dict[str, Any]:
         ("CASE", "basic_info", ("case_id",), ("case_name", "case_id")),
         ("CUSTOMER", "customers", ("entity_id",), ("customer_name", "entity_id")),
         ("ACCOUNT", "accounts", ("entity_id",), ("account_number", "holder_name", "entity_id")),
-        ("ENTITY", "other_entities", ("entity_id",), ("entity_attr_1", "entity_id")),
+        ("OTHER_ENTITY", "other_entities", ("entity_id",), ("entity_attr_1", "entity_id")),
         ("EVENT", "events", ("event_id",), ("event_name", "event_type", "event_id")),
         ("EVIDENCE", "evidences", ("evidence_id",), ("evidence_type", "evidence_id")),
     )
@@ -514,7 +555,9 @@ def run_pipeline(
     if mode == "SINGLE":
         if not source.is_dir():
             raise ValueError("单案例上传目录不存在")
-        records = [load_single_case_directory(source)]
+        records = [load_single_case_directory(
+            source, require_transaction_features=recognition_mode == "NEW"
+        )]
     elif mode == "BATCH":
         if not source.is_file():
             raise ValueError("批处理上传文件不存在")

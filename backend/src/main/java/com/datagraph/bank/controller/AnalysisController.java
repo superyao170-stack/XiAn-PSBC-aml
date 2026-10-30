@@ -218,8 +218,9 @@ public class AnalysisController {
                     上传后返回 `uploadToken`，供“新建上传任务”使用。单案例必须包含
                     `basic_info.json` 与 `customers.json`；`accounts.json` 和 `other_entities.json` 可选。
 
-                    - NEW：系统生成可疑报告，禁止上传 analysis_texts.json；
-                    - HISTORICAL：复用历史可疑报告，必须上传 analysis_texts.json；
+                    - NEW：必须上传 transaction_features.json（顶层 JSON 对象，若包含非空 case_id，须与 basic_info.json 一致），
+                      系统生成可疑报告，禁止上传 analysis_texts.json；
+                    - HISTORICAL：复用历史可疑报告，必须上传 analysis_texts.json，不接收 transaction_features.json；
                     - 单个文件及全部文件合计均不得超过 100MB。
                     """,
             tags = OpenApiConfig.STRUCTURED_CASE_TAG)
@@ -236,7 +237,9 @@ public class AnalysisController {
             @Parameter(description = "accounts.json；可选账户数组")
             @RequestPart(value = "accounts", required = false) MultipartFile accounts,
             @Parameter(description = "other_entities.json；可选其他实体数组")
-            @RequestPart(value = "otherEntities", required = false) MultipartFile otherEntities) throws Exception {
+            @RequestPart(value = "otherEntities", required = false) MultipartFile otherEntities,
+            @Parameter(description = "transaction_features.json；仅 NEW 必传，顶层 JSON 对象；非空 case_id 必须与 basic_info.json 一致")
+            @RequestPart(value = "transactionFeatures", required = false) MultipartFile transactionFeatures) throws Exception {
         String resolvedRecognitionMode = recognitionMode == null ? "" : recognitionMode.trim().toUpperCase();
         if (!List.of("NEW", "HISTORICAL").contains(resolvedRecognitionMode)) {
             return CommonResult.error(400, "案例来源必须是新增案例或历史案例");
@@ -244,11 +247,17 @@ public class AnalysisController {
         if ("NEW".equals(resolvedRecognitionMode) && analysisTexts != null) {
             return CommonResult.error(400, "新增案例不接收 analysis_texts.json，可疑报告由后续流程生成");
         }
+        if ("NEW".equals(resolvedRecognitionMode) && transactionFeatures == null) {
+            return CommonResult.error(400, "新增案例必须上传 transaction_features.json");
+        }
         if ("HISTORICAL".equals(resolvedRecognitionMode) && analysisTexts == null) {
             return CommonResult.error(400, "历史案例必须上传 analysis_texts.json，框架抽取将复用已有分析文本");
         }
+        if ("HISTORICAL".equals(resolvedRecognitionMode) && transactionFeatures != null) {
+            return CommonResult.error(400, "历史案例不接收 transaction_features.json，请上传 analysis_texts.json");
+        }
         List<MultipartFile> supplied = java.util.stream.Stream.of(
-                        basicInfo, customers, analysisTexts, accounts, otherEntities)
+                        basicInfo, customers, analysisTexts, accounts, otherEntities, transactionFeatures)
                 .filter(java.util.Objects::nonNull).toList();
         if (basicInfo.isEmpty() || customers.isEmpty()) {
             return CommonResult.error(400, "单案例处理必须上传 basic_info.json 和 customers.json");
@@ -266,7 +275,7 @@ public class AnalysisController {
         }
 
         String validationError = validateStructuredCaseFiles(
-                basicInfo, customers, analysisTexts, accounts, otherEntities);
+                basicInfo, customers, analysisTexts, accounts, otherEntities, transactionFeatures);
         if (validationError != null) return CommonResult.error(400, validationError);
 
         Path uploadRoot = structuredCaseWorkerRoot.resolve("uploads").normalize();
@@ -277,10 +286,12 @@ public class AnalysisController {
         Files.createDirectory(target);
         saveStructuredCaseFile(target, "basic_info.json", basicInfo);
         saveStructuredCaseFile(target, "customers.json", customers);
+        saveStructuredCaseFile(target, "transaction_features.json", transactionFeatures);
         saveStructuredCaseFile(target, "analysis_texts.json", analysisTexts);
         saveStructuredCaseFile(target, "accounts.json", accounts);
         saveStructuredCaseFile(target, "other_entities.json", otherEntities);
         List<String> fileNames = new java.util.ArrayList<>(List.of("basic_info.json", "customers.json"));
+        if (transactionFeatures != null) fileNames.add("transaction_features.json");
         if (analysisTexts != null) fileNames.add("analysis_texts.json");
         if (accounts != null) fileNames.add("accounts.json");
         if (otherEntities != null) fileNames.add("other_entities.json");
@@ -292,6 +303,13 @@ public class AnalysisController {
                 "processingMode", "SINGLE",
                 "caseType", resolvedRecognitionMode,
                 "recognitionMode", resolvedRecognitionMode));
+    }
+
+    CommonResult<Map<String, Object>> uploadStructuredCaseFile(
+            MultipartFile basicInfo, MultipartFile customers, String recognitionMode,
+            MultipartFile analysisTexts, MultipartFile accounts, MultipartFile otherEntities) throws Exception {
+        return uploadStructuredCaseFile(basicInfo, customers, recognitionMode,
+                analysisTexts, accounts, otherEntities, null);
     }
 
     CommonResult<Map<String, Object>> uploadStructuredCaseFile(
@@ -373,7 +391,14 @@ public class AnalysisController {
     @PostMapping(value = "/structured-case-batch-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
             summary = "1B. 上传批量结构化案例数据",
-            description = "上传一个 CSV 或 XLSX（最大 100MB），服务端校验后返回 uploadToken、案例数和校验结果。",
+            description = """
+                    上传一个 CSV 或 XLSX（最大 100MB），每行一个案例，每个单元格为对应 JSON。
+                    NEW 必须包含 basic_info、customers、transaction_features 三列；accounts、other_entity 可选，
+                    其中 other_entity 也接受单案例使用的 other_entities 列名，两种列名不能同时提供。
+                    basic_info、transaction_features 为对象，customers 为非空客户数组；
+                    accounts、other_entity 内容与单案例相同，均为 JSON 数组，可省略、留空或填写 []。
+                    服务端校验后返回 uploadToken、案例数和校验结果。
+                    """,
             tags = OpenApiConfig.STRUCTURED_CASE_TAG)
     public CommonResult<Map<String, Object>> uploadStructuredCaseBatchFile(
             @Parameter(description = "批量案例 CSV/XLSX 文件", required = true)
@@ -471,11 +496,25 @@ public class AnalysisController {
 
     private String validateStructuredCaseFiles(
             MultipartFile basicInfo, MultipartFile customers, MultipartFile analysisTexts,
-            MultipartFile accounts, MultipartFile otherEntities) {
+            MultipartFile accounts, MultipartFile otherEntities, MultipartFile transactionFeatures) {
         try {
             JsonNode basic = JSON.readTree(basicInfo.getInputStream());
             if (basic == null || !basic.isObject()) return "basic_info.json 顶层必须是 JSON 对象";
             if (basic.path("case_id").asText("").isBlank()) return "basic_info.json 必须包含非空 case_id";
+
+            if (transactionFeatures != null) {
+                JsonNode features = JSON.readTree(transactionFeatures.getInputStream());
+                if (features == null || !features.isObject()) {
+                    return "transaction_features.json 顶层必须是 JSON 对象";
+                }
+                JsonNode featureCaseIdNode = features.path("case_id");
+                String featureCaseId = featureCaseIdNode.isContainerNode()
+                        ? featureCaseIdNode.toString() : featureCaseIdNode.asText("").trim();
+                if (!featureCaseId.isBlank()
+                        && !featureCaseId.equals(basic.path("case_id").asText("").trim())) {
+                    return "transaction_features.json 的 case_id 与 basic_info.json 的 case_id 不一致";
+                }
+            }
 
             JsonNode customerList = JSON.readTree(customers.getInputStream());
             if (customerList == null || !customerList.isArray() || customerList.isEmpty()) {

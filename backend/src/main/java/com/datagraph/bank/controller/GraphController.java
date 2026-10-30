@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.datagraph.bank.security.CurrentUser;
 import com.datagraph.bank.service.TuGraphStructuredWriter;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -256,6 +258,11 @@ public class GraphController {
                 nodes.add(convertNode(node));
                 nodeIds.add(node.elementId());
             }
+            // Imported framework entities are case facts even when no event
+            // relationship has been extracted for them yet.
+            Result owned = session.run("MATCH (n) WHERE n.caseId=$caseId RETURN n LIMIT 5000",
+                    Values.parameters("caseId", caseId));
+            while (owned.hasNext()) addNodeIfMissing(nodes, owned.next().get("n").asNode());
             Result er = session.run("""
                     MATCH (c:Case)-[r]-(n)
                     WHERE c.graphId=$caseId
@@ -266,7 +273,7 @@ public class GraphController {
                 addNodeIfMissing(nodes, row.get("c").asNode());
                 addNodeIfMissing(nodes, row.get("n").asNode());
                 GraphEdge edge = convertEdge(row.get("r").asRelationship());
-                String key = edge.getType() + ":" + edge.getSource() + ":" + edge.getTarget();
+                String key = edge.getId();
                 if (seen.add(key)) edges.add(edge);
             }
             Result deeper = session.run("""
@@ -279,7 +286,7 @@ public class GraphController {
                 addNodeIfMissing(nodes, row.get("n").asNode());
                 addNodeIfMissing(nodes, row.get("m").asNode());
                 GraphEdge edge = convertEdge(row.get("r").asRelationship());
-                String key = edge.getType() + ":" + edge.getSource() + ":" + edge.getTarget();
+                String key = edge.getId();
                 if (seen.add(key)) edges.add(edge);
             }
             Result third = session.run("""
@@ -292,7 +299,7 @@ public class GraphController {
                 addNodeIfMissing(nodes, row.get("m").asNode());
                 addNodeIfMissing(nodes, row.get("x").asNode());
                 GraphEdge edge = convertEdge(row.get("r").asRelationship());
-                String key = edge.getType() + ":" + edge.getSource() + ":" + edge.getTarget();
+                String key = edge.getId();
                 if (seen.add(key)) edges.add(edge);
             }
             Result scoped = session.run("""
@@ -304,7 +311,7 @@ public class GraphController {
                 addNodeIfMissing(nodes, row.get("a").asNode());
                 addNodeIfMissing(nodes, row.get("b").asNode());
                 GraphEdge edge = convertEdge(row.get("r").asRelationship());
-                String key = edge.getType() + ":" + edge.getSource() + ":" + edge.getTarget();
+                String key = edge.getId();
                 if (seen.add(key)) edges.add(edge);
             }
         } catch (Exception e) {
@@ -336,7 +343,7 @@ public class GraphController {
     private boolean isV18CaseGraphNode(GraphNode node) {
         Set<String> allowed = Set.of(
                 "CASE", "CUSTOMER", "ORGANIZATION", "MERCHANT", "ACCOUNT", "WALLET",
-                "DEVICE", "IP_ADDRESS", "ADDRESS", "EVIDENCE", "EVENT",
+                "DEVICE", "IP_ADDRESS", "ADDRESS", "OTHER_ENTITY", "EVIDENCE", "EVENT",
                 "INDICATOR_RESULT", "BEHAVIOR_PATTERN", "RISK_HYPOTHESIS",
                 "INVESTIGATION_HYPOTHESIS");
         String nodeType = Objects.toString(node.getProperties().get("nodeType"), "")
@@ -548,6 +555,18 @@ public class GraphController {
         for (String key : node.keys()) {
             properties.put(key, convertValue(node.get(key)));
         }
+        Object originalProperties = properties.remove("propertiesJson");
+        if (originalProperties instanceof String raw && !raw.isBlank()) {
+            try {
+                Map<String, Object> original = new ObjectMapper().readValue(raw,
+                        new TypeReference<Map<String, Object>>() {});
+                // Physical identity and ownership always win over source fields.
+                original.putAll(properties);
+                properties = original;
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+                // Older graph projections may not carry a valid source payload.
+            }
+        }
         return new GraphNode(node.elementId(), String.join(",", node.labels()), properties);
     }
 
@@ -556,8 +575,16 @@ public class GraphController {
         for (String key : rel.keys()) {
             properties.put(key, convertValue(rel.get(key)));
         }
-        return new GraphEdge(rel.elementId(), rel.type(), 
-                rel.startNodeElementId(), rel.endNodeElementId(), properties);
+        String source = rel.startNodeElementId();
+        String target = rel.endNodeElementId();
+        String graphId = Objects.toString(properties.get("graphId"), "").trim();
+        // TuGraph's elementId is local to an endpoint pair and may be "0"
+        // for many unrelated edges. Preserve the persisted relationship ID,
+        // or include the endpoints/type before using the native ID.
+        String edgeId = graphId.isBlank()
+                ? source + ":" + rel.type() + ":" + target + ":" + rel.elementId()
+                : graphId;
+        return new GraphEdge(edgeId, rel.type(), source, target, properties);
     }
 
     private Object convertValue(Value value) {

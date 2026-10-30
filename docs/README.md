@@ -1,11 +1,11 @@
 # Swagger / OpenAPI 文档
 
-后端启动后可通过以下地址访问：
+本地后端启动后可通过以下地址访问（默认 3032，部署时以 `SERVER_PORT` 为准）：
 
-- Swagger UI：`http://localhost:3030/swagger-ui.html`
-- 完整 OpenAPI JSON：`http://localhost:3030/api-docs`
-- 结构化案例识别流程：`http://localhost:3030/api-docs/01-结构化案例识别流程`
-- 案例复核审批流程：`http://localhost:3030/api-docs/02-案例复核审批流程`
+- Swagger UI：`http://localhost:3032/swagger-ui.html`
+- 完整 OpenAPI JSON：`http://localhost:3032/api-docs`
+- 结构化案例识别流程：`http://localhost:3032/api-docs/01-结构化案例识别流程`
+- 案例复核审批流程：`http://localhost:3032/api-docs/02-案例复核审批流程`
 
 `swagger.json` 是从正在运行的后端 `/api-docs` 导出的接口快照，可导入 Postman、Apifox 等工具。接口发生变化后，应重新启动后端并更新该文件。
 

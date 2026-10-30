@@ -709,8 +709,13 @@ public class TuGraphStructuredWriter {
                                 + "'bankCode','string',true,'workspaceId','string',true,"
                                 + "'nodeType','string',true,'name','string',true,"
                                 + "'summary','string',true,'eventName','string',true,"
-                                + "'eventType','string',true,'eventText','string',true)").consume();
+                                + "'eventType','string',true,'eventText','string',true,"
+                                + "'propertiesJson','string',true)").consume();
                     } catch (Exception ignored) { /* label already exists */ }
+                    try {
+                        session.run("CALL db.alterLabelAddFields('vertex','" + label
+                                + "',['propertiesJson','string','',true])").consume();
+                    } catch (Exception ignored) { /* field already exists */ }
                 }
                 try {
                     session.run("CALL db.createEdgeLabel('RELATES_TO','[]','graphId','string',true,"
@@ -744,11 +749,13 @@ public class TuGraphStructuredWriter {
                     "event_description", "original_data", "description", "summary"));
             String eventName = "Event".equals(label) ? node.path("event_name").asText("") : "";
             String eventType = "Event".equals(label) ? node.path("event_type").asText("") : "";
-            rows.add(Map.of(
+            Map<String,Object> row = new LinkedHashMap<>(Map.of(
                     "graphId", graphId, "caseId", caseId, "bankCode", bankCode,
                     "workspaceId", Long.toString(workspaceId), "nodeType", nodeType,
                     "name", name, "summary", summary, "eventName", eventName,
                     "eventType", eventType, "eventText", summary));
+            row.put("propertiesJson", node.toString());
+            rows.add(row);
         }
         if (!rows.isEmpty()) {
             session.run("CALL db.upsertVertex('" + label + "',$rows)",

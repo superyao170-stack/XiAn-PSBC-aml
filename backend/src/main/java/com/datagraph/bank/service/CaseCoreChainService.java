@@ -26,7 +26,7 @@ public class CaseCoreChainService {
     private static final String SNAPSHOT_FORMAT_VERSION = "1.8.1";
     private static final Set<String> GRAPH_NODE_TYPES = Set.of(
             "CASE", "CUSTOMER", "ORGANIZATION", "MERCHANT", "ACCOUNT", "WALLET",
-            "DEVICE", "IP_ADDRESS", "ADDRESS", "EVIDENCE", "EVENT",
+            "DEVICE", "IP_ADDRESS", "ADDRESS", "OTHER_ENTITY", "EVIDENCE", "EVENT",
             "BEHAVIOR_PATTERN", "RISK_HYPOTHESIS", "INVESTIGATION_HYPOTHESIS");
 
     private final JdbcTemplate jdbc;
@@ -70,7 +70,7 @@ public class CaseCoreChainService {
                 "validationMetrics").stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Core-chain snapshot not found"));
         snapshot.put("domainTypeSummary", props(
-                "eventGraphNodeTypes", 11, "reasoningGraphNodeTypes", 3,
+                "eventGraphNodeTypes", 12, "reasoningGraphNodeTypes", 3,
                 "narrativeObjectTypes", 1, "knowledgeDefinitionTypes", 5,
                 "auxiliaryRecordTypes", 4));
         snapshot.put("runtimeObjectCounts", frozenObjectCounts(chainId));
@@ -352,8 +352,8 @@ public class CaseCoreChainService {
         Map<String, Object> latest = latestSnapshot(caseId);
         Map<String, Object> summary = props(
                 "schemaVersion", SCHEMA_VERSION,
-                "formalNodeTypeCount", 14,
-                "eventGraphTypeCount", 11,
+                "formalNodeTypeCount", 15,
+                "eventGraphTypeCount", 12,
                 "reasoningGraphTypeCount", 3,
                 "narrativeObjectCount", matters.size(),
                 "knowledgeBindingCount", knowledgeBindings.size(),
@@ -368,7 +368,7 @@ public class CaseCoreChainService {
                 "validationIssueCount", issues.size(),
                 "validationMetrics", graphValidation.asMap(),
                 "domainTypeSummary", props(
-                        "eventGraphNodeTypes", 11,
+                        "eventGraphNodeTypes", 12,
                         "reasoningGraphNodeTypes", 3,
                         "narrativeObjectTypes", 1,
                         "knowledgeDefinitionTypes", 5,
@@ -643,38 +643,49 @@ public class CaseCoreChainService {
                     (Map<String, Object>) edges.get(edges.size() - 1).get("properties");
             edgeProperties.put("sourceRelationshipType", item.path("type").asText());
             edgeProperties.put("sourceRelationshipId", item.path("id").asText());
+            edgeProperties.put("sourceRef", item.path("id").asText());
             if (item.path("properties").isObject()) {
                 edgeProperties.put("sourceProperties",
                         mapper.convertValue(item.path("properties"), LinkedHashMap.class));
             }
         });
+        // A framework account/entity may be present in the uploaded materials
+        // before an event role is identified. Keep that sourced fact in scope.
+        for (Map<String,Object> node : nodes) {
+            String type = canonicalType(node);
+            if (!Set.of("ACCOUNT", "OTHER_ENTITY").contains(type)) continue;
+            if (!(node.get("properties") instanceof Map<?,?> properties)
+                    || !"STRUCTURED_GRAPH_SNAPSHOT".equals(properties.get("source"))) continue;
+            String id = Objects.toString(node.get("id"), "");
+            boolean scoped = edges.stream().anyMatch(edge -> caseId.equals(edge.get("source"))
+                    && id.equals(edge.get("target")));
+            if (scoped) continue;
+            addEdge(edges, caseId, "CASE", "ACCOUNT".equals(type)
+                    ? "INVOLVES_ASSET" : "INVOLVES_ENTITY", id, type,
+                    "FACT", "SCOPE", "STRUCTURED_GRAPH_SNAPSHOT", false);
+            ((Map<String,Object>) edges.get(edges.size() - 1).get("properties"))
+                    .put("sourceRef", id);
+        }
         return hasEvidence[0];
     }
 
     private String structuredCanonicalType(String rawType, String id, String label,
                                            Map<String, Object> properties) {
         if (Set.of("CUSTOMER", "ACCOUNT", "EVIDENCE", "DEVICE", "WALLET",
-                "ADDRESS", "IP_ADDRESS", "MERCHANT", "ORGANIZATION").contains(rawType)) {
+                "ADDRESS", "IP_ADDRESS", "MERCHANT", "ORGANIZATION", "OTHER_ENTITY").contains(rawType)) {
             return rawType;
         }
         if (!"ENTITY".equals(rawType)) return "";
-        String hint = (id + " " + label + " " + first(properties,
-                "entity_type", "entity_attr_2", "entity_attr_3")).toUpperCase();
-        if (id.toUpperCase().startsWith("PER") || hint.contains("个人")
-                || hint.contains("自然人")) return "CUSTOMER";
-        if (id.toUpperCase().startsWith("MER") || hint.contains("商户")) return "MERCHANT";
-        if (id.toUpperCase().startsWith("DEV") || hint.contains("设备")) return "DEVICE";
-        if (hint.contains("IP")) return "IP_ADDRESS";
-        if (hint.contains("地址")) return "ADDRESS";
-        if (hint.contains("钱包")) return "WALLET";
-        return "ORGANIZATION";
+        // ENTITY is the framework's other_entities group. Its entity_type and
+        // attributes describe the subtype without changing the formal category.
+        return "OTHER_ENTITY";
     }
 
     private SnapshotRelation structuredRelation(String rawRelation,
                                                   String sourceType, String targetType) {
         boolean sourceSubject = Set.of("CUSTOMER", "ORGANIZATION", "MERCHANT").contains(sourceType);
         boolean targetSubject = Set.of("CUSTOMER", "ORGANIZATION", "MERCHANT").contains(targetType);
-        return switch (rawRelation == null ? "" : rawRelation.trim()) {
+        SnapshotRelation mapped = switch (rawRelation == null ? "" : rawRelation.trim()) {
             case "包含关系" -> "CASE".equals(sourceType) && "EVENT".equals(targetType)
                     ? new SnapshotRelation("INVESTIGATION_SCOPE", false) : null;
             case "持有关系" -> sourceSubject && "ACCOUNT".equals(targetType)
@@ -691,6 +702,12 @@ public class CaseCoreChainService {
                 if ("CASE".equals(sourceType)
                         && Set.of("DEVICE", "IP_ADDRESS", "ADDRESS").contains(targetType))
                     yield new SnapshotRelation("INVOLVES_ENVIRONMENT", false);
+                if (Set.of("CASE", "EVENT").contains(sourceType)
+                        && "OTHER_ENTITY".equals(targetType))
+                    yield new SnapshotRelation("INVOLVES_ENTITY", false);
+                if ("OTHER_ENTITY".equals(sourceType)
+                        && Set.of("CASE", "EVENT").contains(targetType))
+                    yield new SnapshotRelation("INVOLVES_ENTITY", true);
                 if (sourceSubject && "EVENT".equals(targetType))
                     yield new SnapshotRelation("SUBJECT", true);
                 if ("EVENT".equals(sourceType) && targetSubject)
@@ -713,6 +730,11 @@ public class CaseCoreChainService {
                     ? new SnapshotRelation("DERIVED_FROM_SOURCE", false) : null;
             default -> null;
         };
+        if (mapped == null && ("OTHER_ENTITY".equals(sourceType)
+                || "OTHER_ENTITY".equals(targetType))) {
+            return new SnapshotRelation("ASSOCIATED_WITH", false);
+        }
+        return mapped;
     }
 
     private record SnapshotRelation(String type, boolean reverse) {}
@@ -1807,6 +1829,7 @@ public class CaseCoreChainService {
             case "ORGANIZATION" -> "ORG";
             case "MERCHANT" -> "MCH";
             case "ACCOUNT" -> "ACC";
+            case "OTHER_ENTITY" -> "ENT";
             case "WALLET" -> "WAL";
             case "DEVICE" -> "DEV";
             case "IP_ADDRESS", "IPADDRESS" -> "IPA";

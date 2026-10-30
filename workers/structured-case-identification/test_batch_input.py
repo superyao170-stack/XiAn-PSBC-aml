@@ -203,7 +203,7 @@ class BatchInputTests(unittest.TestCase):
                     raise RuntimeError("second case failed")
                 return {"generated": True, "analysisTexts": {"summary": "报告"}}
 
-            def extract_case(_workflow, record, _text, _index, output_root):
+            def extract_case(_workflow, record, _text, _index, _total, output_root, _progress):
                 case_id = record["basic_info"]["case_id"]
                 final_path = output_root / case_id / "final_case.json"
                 final_path.parent.mkdir(parents=True, exist_ok=True)
@@ -279,7 +279,7 @@ class BatchInputTests(unittest.TestCase):
                     "analysisText": "报告",
                 }
 
-            def extract_case(_workflow, record, _text, _index, output_root):
+            def extract_case(_workflow, record, _text, _index, _total, output_root, _progress):
                 case_id = record["basic_info"]["case_id"]
                 final_path = output_root / case_id / "final_case.json"
                 final_path.parent.mkdir(parents=True, exist_ok=True)

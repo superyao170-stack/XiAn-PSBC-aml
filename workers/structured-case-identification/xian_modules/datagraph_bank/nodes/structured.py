@@ -6,6 +6,8 @@ import copy
 import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from datagraph_bank.input_normalization import normalize_case_entities
+
 from datagraph_bank.models import (
     ENUM_MAPPINGS,
     AccountEntity,
@@ -21,6 +23,7 @@ class StructuredDataProcessor:
     """Map JSON records into the output schema and backfill missing fields from text."""
 
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        state = normalize_case_entities(state)
         basic_info = copy.deepcopy(state.get("basic_info") or {})
         customers = copy.deepcopy(state.get("customers") or [])
         accounts = copy.deepcopy(state.get("accounts") or [])

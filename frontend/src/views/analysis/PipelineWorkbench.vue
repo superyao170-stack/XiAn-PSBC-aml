@@ -124,9 +124,10 @@
             <div v-if="structuredCaseFiles.analysisTexts" class="selected-file"><el-tag type="success">历史复用</el-tag><span>{{ structuredCaseFiles.analysisTexts.name }}</span><em>{{ formatFileSize(structuredCaseFiles.analysisTexts.size) }}</em></div>
             <div class="batch-hint">上传 analysis_texts.json，至少包含一段非空历史分析文本；上传后直接用于框架抽取。</div>
           </el-form-item>
-          <el-form-item v-else label="后续处理">
-            <el-tag type="success">系统生成</el-tag>
-            <div class="batch-hint">上传完成后进入可疑报告处理页面。</div>
+          <el-form-item v-else label="交易特征" for="aml-transaction-features" required>
+            <input id="aml-transaction-features" type="file" accept=".json,application/json" aria-describedby="aml-transaction-features-hint" @change="selectStructuredCaseFile('transactionFeatures', $event)" />
+            <div v-if="structuredCaseFiles.transactionFeatures" class="selected-file"><el-tag type="success">已选择</el-tag><span>{{ structuredCaseFiles.transactionFeatures.name }}</span><em>{{ formatFileSize(structuredCaseFiles.transactionFeatures.size) }}</em></div>
+            <div id="aml-transaction-features-hint" class="batch-hint">上传 transaction_features.json，顶层必须是 JSON 对象；case_id（如有）需与基本信息一致。</div>
           </el-form-item>
           <el-form-item label="账户信息" :required="isAntiFraud">
             <input type="file" accept=".json,application/json" @change="selectStructuredCaseFile('accounts', $event)" />
@@ -336,13 +337,14 @@ const structuredBatchCaseCount=ref(0)
 const structuredCaseFiles=reactive<{
   basicInfo:File|null
   customers:File|null
+  transactionFeatures:File|null
   analysisTexts:File|null
   accounts:File|null
   otherEntities:File|null
   devices:File|null
   eventChain:File|null
   textAnalysis:File|null
-}>({basicInfo:null,customers:null,analysisTexts:null,accounts:null,otherEntities:null,devices:null,eventChain:null,textAnalysis:null})
+}>({basicInfo:null,customers:null,transactionFeatures:null,analysisTexts:null,accounts:null,otherEntities:null,devices:null,eventChain:null,textAnalysis:null})
 const structuredCaseUploadToken=ref('')
 const bankOptions = [
   {label:'中国测试银行',value:'中国测试银行'},
@@ -370,7 +372,7 @@ const batchHeaderHint=computed(()=>isAntiFraud.value
     ? '表头必须为 basic_info、customers、accounts、devices、event_chain；每个单元格填写对应 JSON。'
     : '表头必须为 basic_info、customers、accounts、devices、text_analysis；每个单元格填写对应 JSON。'
   : structuredRecognitionMode.value==='NEW'
-    ? '新增案例表头：basic_info、customers、transaction_features；每个单元格填写对应 JSON。'
+    ? '新增案例必填列：basic_info、customers、transaction_features；可选列：accounts、other_entity（兼容 other_entities）。每个单元格填写对应 JSON；可选列内容与单案例一致，必须是 JSON 数组，可留空或填写 []。'
     : '历史案例表头：basic_info、customers、analysis_texts；每个单元格填写对应 JSON。')
 const wizardInputReady=computed(()=>Boolean(
   structuredCaseMode.value==='BATCH' ? structuredBatchFile.value
@@ -378,7 +380,7 @@ const wizardInputReady=computed(()=>Boolean(
       ? structuredCaseFiles.basicInfo&&structuredCaseFiles.customers&&structuredCaseFiles.accounts&&structuredCaseFiles.devices
         &&(structuredRecognitionMode.value==='HISTORICAL'?structuredCaseFiles.textAnalysis:structuredCaseFiles.eventChain)
       : structuredCaseFiles.basicInfo&&structuredCaseFiles.customers
-        &&(structuredRecognitionMode.value==='NEW'||structuredCaseFiles.analysisTexts)
+        &&(structuredRecognitionMode.value==='NEW'?structuredCaseFiles.transactionFeatures:structuredCaseFiles.analysisTexts)
 ))
 const workspaceDisplay=computed(()=>`默认数据空间（ID：${form.workspaceId}）`)
 const fileIdentity=(file:File|null)=>file?`${file.name}:${file.size}:${file.lastModified}`:''
@@ -390,6 +392,7 @@ const currentInputSignature=computed(()=>[
   fileIdentity(structuredBatchFile.value),
   fileIdentity(structuredCaseFiles.basicInfo),
   fileIdentity(structuredCaseFiles.customers),
+  fileIdentity(structuredCaseFiles.transactionFeatures),
   fileIdentity(structuredCaseFiles.analysisTexts),
   fileIdentity(structuredCaseFiles.accounts),
   fileIdentity(structuredCaseFiles.otherEntities),
@@ -405,7 +408,7 @@ const selectedInputText=computed(()=>{
   }
   if(isAntiFraud.value)return `单案例处理 · ${type}（基础四类 JSON + ${structuredRecognitionMode.value==='NEW'?'event_chain.json':'text_analysis.json'}）`
   const optional=[structuredCaseFiles.accounts,structuredCaseFiles.otherEntities].filter(Boolean).length
-  return `单案例处理 · ${type}（${structuredRecognitionMode.value==='HISTORICAL'?3:2} 个必填文件，${optional} 个可选文件）`
+  return `单案例处理 · ${type}（3 个必填文件，${optional} 个可选文件）`
 })
 const advanceCreateStep=async()=>{
   if(createStep.value===1&&!wizardInputReady.value){
@@ -414,7 +417,7 @@ const advanceCreateStep=async()=>{
         ? '请选择 CSV/XLSX 批处理文件'
         : isAntiFraud.value
         ? `请选择 basic_info.json、customers.json、accounts.json、devices.json 和 ${structuredRecognitionMode.value==='NEW'?'event_chain.json':'text_analysis.json'}`
-        : `请选择 basic_info.json、customers.json${structuredRecognitionMode.value==='HISTORICAL'?' 和 analysis_texts.json':''}`)
+        : `请选择 basic_info.json、customers.json 和 ${structuredRecognitionMode.value==='HISTORICAL'?'analysis_texts.json':'transaction_features.json'}`)
   }
   if(createStep.value===1){
     validatingData.value=true
@@ -445,6 +448,7 @@ const resetStructuredCaseUpload=()=>{
   validatedInputSignature.value=''
 }
 const changeStructuredRecognitionMode=()=>{
+  structuredCaseFiles.transactionFeatures=null
   structuredCaseFiles.analysisTexts=null
   structuredCaseFiles.textAnalysis=null
   if(structuredRecognitionMode.value==='HISTORICAL')structuredCaseFiles.eventChain=null
@@ -461,7 +465,7 @@ const changeScenario=()=>{
   structuredCaseMode.value='SINGLE'
   structuredBatchFile.value=null
   structuredBatchCaseCount.value=0
-  Object.assign(structuredCaseFiles,{basicInfo:null,customers:null,analysisTexts:null,accounts:null,
+  Object.assign(structuredCaseFiles,{basicInfo:null,customers:null,transactionFeatures:null,analysisTexts:null,accounts:null,
     otherEntities:null,devices:null,eventChain:null,textAnalysis:null})
   resetStructuredCaseUpload()
 }
@@ -511,7 +515,7 @@ const validateSelectedData=async()=>{
       ? [structuredCaseFiles.basicInfo,structuredCaseFiles.customers,structuredCaseFiles.accounts,structuredCaseFiles.devices,
           structuredRecognitionMode.value==='NEW'?structuredCaseFiles.eventChain:structuredCaseFiles.textAnalysis]
       : [structuredCaseFiles.basicInfo,structuredCaseFiles.customers,
-          structuredRecognitionMode.value==='HISTORICAL'?structuredCaseFiles.analysisTexts:true]
+          structuredRecognitionMode.value==='HISTORICAL'?structuredCaseFiles.analysisTexts:structuredCaseFiles.transactionFeatures]
     if(required.some(file=>!file))return false
     const files=Object.values(structuredCaseFiles).filter((file):file is File=>Boolean(file))
     const invalid=files.find(file=>!file.name.toLowerCase().endsWith('.json')||file.size<=0||file.size>100*1024*1024)
@@ -525,6 +529,11 @@ const validateSelectedData=async()=>{
         else if(!String(basic.case_id||'').trim())contentError='basic_info.json 必须包含非空 case_id'
         else if(!Array.isArray(customers)||!customers.length)contentError='customers.json 顶层必须是非空 JSON 数组'
         else if(customers.some((item:any)=>!item||Array.isArray(item)||typeof item!=='object'||!String(item.entity_id||'').trim()))contentError='customers.json 中每个客户都必须包含非空 entity_id'
+        if(!contentError&&!isAntiFraud.value&&structuredRecognitionMode.value==='NEW'){
+          const features=JSON.parse(await (structuredCaseFiles.transactionFeatures as File).text())
+          if(!features||Array.isArray(features)||typeof features!=='object')contentError='transaction_features.json 顶层必须是 JSON 对象'
+          else if(String(features.case_id||'').trim()&&String(features.case_id).trim()!==String(basic.case_id).trim())contentError='transaction_features.json 的 case_id 与 basic_info.json 的 case_id 不一致'
+        }
         if(!contentError&&structuredCaseFiles.analysisTexts){
           const analysis=JSON.parse(await structuredCaseFiles.analysisTexts.text())
           if(!analysis||Array.isArray(analysis)||typeof analysis!=='object'||!Object.values(analysis).some(value=>typeof value==='string'&&value.trim()))contentError='analysis_texts.json 顶层必须是对象，并至少包含一段非空分析文本'
@@ -553,7 +562,7 @@ const validateSelectedData=async()=>{
     const caseKind=structuredRecognitionMode.value==='HISTORICAL'?'历史案例':'新增案例'
     dataValidation.value={
       status:blocked?'BLOCKED':'PASSED',source:`单案例处理 · ${caseKind}`,
-      batchName:[structuredCaseFiles.basicInfo?.name,structuredCaseFiles.customers?.name].join(' + '),
+      batchName:files.map(file=>file.name).join(' + '),
       dataScale:`${files.length} 个 JSON 文件，共 ${formatFileSize(totalSize)}`,nameCheck:'必填文件与可选文件已确认',
       fingerprint:'上传后由服务端按案例目录计算 SHA-256',
       labelCheck:isAntiFraud.value
@@ -834,6 +843,7 @@ const createJob = async () => {
   try {
     if(structuredCaseMode.value==='SINGLE'){
       if(!structuredCaseFiles.basicInfo||!structuredCaseFiles.customers)throw new Error('请选择 basic_info.json 和 customers.json')
+      if(!isAntiFraud.value&&structuredRecognitionMode.value==='NEW'&&!structuredCaseFiles.transactionFeatures)throw new Error('请选择 transaction_features.json')
       const uploaded:any=isAntiFraud.value
         ? await uploadAntiFraudCaseFilesApi({
             basicInfo:structuredCaseFiles.basicInfo,
@@ -848,6 +858,7 @@ const createJob = async () => {
             basicInfo:structuredCaseFiles.basicInfo,
             customers:structuredCaseFiles.customers,
             recognitionMode:structuredRecognitionMode.value,
+            transactionFeatures:structuredRecognitionMode.value==='NEW'?structuredCaseFiles.transactionFeatures:null,
             analysisTexts:structuredCaseFiles.analysisTexts,
             accounts:structuredCaseFiles.accounts,
             otherEntities:structuredCaseFiles.otherEntities
@@ -861,7 +872,7 @@ const createJob = async () => {
       sourceFileName:structuredCaseMode.value==='BATCH' ? structuredBatchFile.value?.name
         : isAntiFraud.value
           ? `basic_info.json + customers.json + accounts.json + devices.json + ${structuredRecognitionMode.value==='NEW'?'event_chain.json':'text_analysis.json'}`
-          : `basic_info.json + customers.json${structuredCaseFiles.analysisTexts?' + analysis_texts.json':''}${structuredCaseFiles.accounts?' + accounts.json':''}${structuredCaseFiles.otherEntities?' + other_entities.json':''}`
+          : `basic_info.json + customers.json${structuredRecognitionMode.value==='NEW'?' + transaction_features.json':' + analysis_texts.json'}${structuredCaseFiles.accounts?' + accounts.json':''}${structuredCaseFiles.otherEntities?' + other_entities.json':''}`
     }
     const response: any = await createAnalysisJobApi({
       ...form, jobType: config.value.mode,
@@ -894,6 +905,7 @@ const openCreateTask=()=>{
   structuredBatchCaseCount.value=0
   structuredCaseFiles.basicInfo=null
   structuredCaseFiles.customers=null
+  structuredCaseFiles.transactionFeatures=null
   structuredCaseFiles.analysisTexts=null
   structuredCaseFiles.accounts=null
   structuredCaseFiles.otherEntities=null

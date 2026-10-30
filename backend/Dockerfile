@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir "modelscope>=1.20,<2" \
     && test -s /models/bge-small-zh-v1.5/model.safetensors \
     && test -s /models/bge-reranker-v2-m3/model.safetensors
 
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 RUN apt-get update \
@@ -29,7 +29,8 @@ COPY workers/aml-intelligence /app/workers/aml-intelligence
 COPY workers/structured-case-identification /app/workers/structured-case-identification
 COPY backend/target/bankgraph-backend-*.jar bankgraph-backend.jar
 
-ENV WORKER_PYTHON=/opt/aml-venv/bin/python \
+ENV SERVER_PORT=3030 \
+    WORKER_PYTHON=/opt/aml-venv/bin/python \
     AML_INTELLIGENCE_WORKER_ROOT=/app/workers/aml-intelligence \
     STRUCTURED_CASE_WORKER_ROOT=/app/workers/structured-case-identification \
     AML_EMBEDDING_MODEL=/opt/models/bge-small-zh-v1.5 \

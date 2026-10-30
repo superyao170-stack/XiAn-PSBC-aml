@@ -1,5 +1,6 @@
 server:
-  port: ${SERVER_PORT:3030}
+  # 本地与 datagraph-bank（3030）并行运行；部署时可用 SERVER_PORT 覆盖。
+  port: ${SERVER_PORT:3032}
 
 spring:
   servlet:

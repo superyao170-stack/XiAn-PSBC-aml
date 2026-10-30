@@ -103,7 +103,8 @@ def _case_information(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _transaction_features(record: dict[str, Any]) -> dict[str, Any]:
-    supplied = _object(
+    """Return supplied features without inventing absent transaction records."""
+    return _object(
         record,
         "transaction_features",
         "transactionFeatures",
@@ -111,39 +112,13 @@ def _transaction_features(record: dict[str, Any]) -> dict[str, Any]:
         "featureAnalysis",
         "transactions",
     )
-    if supplied:
-        return supplied
-
-    # The new single-case contract only requires basic_info + customers.  The
-    # unchanged Xi'an generator requires one feature row for every customer,
-    # so the adapter explicitly represents the absent transaction source as
-    # "no transaction record" instead of inventing transaction statistics.
-    customers = _list(record, "customers", "customer_info", "customerInfo")
-    return {
-        "customer_transaction_features": [
-            {
-                "customer_id": str(customer.get("entity_id") or "").strip(),
-                "has_transaction_flag": 0,
-            }
-            for customer in customers
-            if isinstance(customer, dict)
-            and str(customer.get("entity_id") or "").strip()
-        ]
-    }
 
 
 def generate_analysis_text(record: dict[str, Any]) -> dict[str, Any]:
     """Call the existing Xi'an aml_analysis_workflow generator."""
-    supplied_features = bool(
-        _object(
-            record,
-            "transaction_features",
-            "transactionFeatures",
-            "feature_analysis",
-            "featureAnalysis",
-            "transactions",
-        )
-    )
+    features = _transaction_features(record)
+    if not features:
+        raise ValueError("生成可疑报告必须提供非空 transaction_features JSON 对象，不能自动补成无交易记录")
     client = DeepSeekLLMClient(enabled=True)
     try:
         generator = GovernedAnalysisTextGenerator(
@@ -155,7 +130,7 @@ def generate_analysis_text(record: dict[str, Any]) -> dict[str, Any]:
         )
         generated, audit = generator.generate_artifact(
             _case_information(record),
-            _transaction_features(record),
+            features,
         )
     finally:
         client.close()
@@ -177,9 +152,7 @@ def generate_analysis_text(record: dict[str, Any]) -> dict[str, Any]:
         "rewriteCounts": dict(generated.rewrite_counts),
         "lengthWarnings": list(generated.length_warnings),
         "audit": audit,
-        "transactionFeatureSource": (
-            "SUPPLIED" if supplied_features else "SYNTHESIZED_NO_TRANSACTION_RECORDS"
-        ),
+        "transactionFeatureSource": "SUPPLIED",
         "algorithm": ALGORITHM_NAME,
         "algorithmVersion": ALGORITHM_VERSION,
     }

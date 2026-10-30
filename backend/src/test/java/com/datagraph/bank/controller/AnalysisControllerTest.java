@@ -83,6 +83,7 @@ class AnalysisControllerTest {
         assertTrue(Files.isRegularFile(uploadDirectory.resolve("analysis_texts.json")));
         assertTrue(Files.isRegularFile(uploadDirectory.resolve("accounts.json")));
         assertTrue(Files.notExists(uploadDirectory.resolve("other_entities.json")));
+        assertTrue(Files.notExists(uploadDirectory.resolve("transaction_features.json")));
     }
 
     @Test
@@ -91,7 +92,8 @@ class AnalysisControllerTest {
         MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"customer_name\":\"张三\"}]");
 
         CommonResult<Map<String, Object>> result = controller.uploadStructuredCaseFile(
-                basic, customers, null, null, null);
+                basic, customers, "NEW", null, null, null,
+                jsonFile("transactionFeatures", "transaction_features.json", "{}"));
 
         assertEquals(400, result.getCode());
         assertTrue(result.getMessage().contains("entity_id"));
@@ -123,12 +125,123 @@ class AnalysisControllerTest {
         CommonResult<Map<String, Object>> rejected = controller.uploadStructuredCaseFile(
                 basic, customers, "NEW", analysis, null, null);
         CommonResult<Map<String, Object>> accepted = controller.uploadStructuredCaseFile(
-                basic, customers, "NEW", null, null, null);
+                basic, customers, "NEW", null, null, null,
+                jsonFile("transactionFeatures", "transaction_features.json", "{}"));
 
         assertEquals(400, rejected.getCode());
         assertTrue(rejected.getMessage().contains("后续流程生成"));
         assertEquals(200, accepted.getCode());
         assertEquals("NEW", accepted.getData().get("recognitionMode"));
+    }
+
+    @Test
+    void newSingleCaseUploadRequiresTransactionFeaturesIncludingLegacyOverloads() throws Exception {
+        MockMultipartFile basic = jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"CASE-1\"}");
+        MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUST-1\"}]");
+
+        CommonResult<Map<String, Object>> missing = controller.uploadStructuredCaseFile(
+                basic, customers, "NEW", null, null, null, null);
+        CommonResult<Map<String, Object>> legacy = controller.uploadStructuredCaseFile(
+                basic, customers, null, null, null);
+        CommonResult<Map<String, Object>> empty = controller.uploadStructuredCaseFile(
+                basic, customers, "NEW", null, null, null,
+                jsonFile("transactionFeatures", "transaction_features.json", ""));
+
+        assertEquals(400, missing.getCode());
+        assertTrue(missing.getMessage().contains("必须上传 transaction_features.json"));
+        assertEquals(400, legacy.getCode());
+        assertTrue(legacy.getMessage().contains("必须上传 transaction_features.json"));
+        assertEquals(400, empty.getCode());
+        assertTrue(empty.getMessage().contains("不能为空"));
+        assertTrue(Files.notExists(structuredCaseRoot.resolve("uploads")));
+    }
+
+    @Test
+    void newSingleCaseUploadPreservesCompactTransactionFeaturesAndOptionalFiles() throws Exception {
+        MockMultipartFile basic = jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"CASE-1\"}");
+        MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUST-1\"}]");
+        MockMultipartFile accounts = jsonFile("accounts", "accounts.json", "[{\"entity_id\":\"ACC-1\"}]");
+        MockMultipartFile others = jsonFile("otherEntities", "other_entities.json", "[]");
+        String featureJson = "{\"schema_version\":\"1.0\",\"case_id\":\"CASE-1\",\"feature_level\":\"customer\","
+                + "\"customer_features\":[{\"entity_id\":\"CUST-1\",\"customer_name\":\"测试客户\",\"tx_cnt_30d\":12}]}";
+        MockMultipartFile features = jsonFile("transactionFeatures", "transaction_features.json", featureJson);
+
+        CommonResult<Map<String, Object>> result = controller.uploadStructuredCaseFile(
+                basic, customers, "NEW", null, accounts, others, features);
+
+        assertEquals(200, result.getCode());
+        assertEquals(List.of("basic_info.json", "customers.json", "transaction_features.json",
+                "accounts.json", "other_entities.json"), result.getData().get("fileNames"));
+        assertEquals(basic.getSize() + customers.getSize() + accounts.getSize() + others.getSize() + features.getSize(),
+                result.getData().get("fileSize"));
+        Path uploadDirectory = structuredCaseRoot.resolve("uploads")
+                .resolve(String.valueOf(result.getData().get("uploadToken")));
+        assertEquals(featureJson, Files.readString(uploadDirectory.resolve("transaction_features.json")));
+        assertTrue(Files.isRegularFile(uploadDirectory.resolve("accounts.json")));
+        assertTrue(Files.isRegularFile(uploadDirectory.resolve("other_entities.json")));
+        assertTrue(Files.notExists(uploadDirectory.resolve("analysis_texts.json")));
+    }
+
+    @Test
+    void newSingleCaseUploadRejectsInvalidTransactionFeaturesAndMismatchedCaseId() throws Exception {
+        MockMultipartFile basic = jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"CASE-1\"}");
+        MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUST-1\"}]");
+        for (String content : List.of("[]", "null", "\"text\"")) {
+            CommonResult<Map<String, Object>> invalidType = controller.uploadStructuredCaseFile(
+                    basic, customers, "NEW", null, null, null,
+                    jsonFile("transactionFeatures", "transaction_features.json", content));
+            assertEquals(400, invalidType.getCode());
+            assertTrue(invalidType.getMessage().contains("transaction_features.json 顶层必须是 JSON 对象"));
+        }
+        CommonResult<Map<String, Object>> invalidJson = controller.uploadStructuredCaseFile(
+                basic, customers, "NEW", null, null, null,
+                jsonFile("transactionFeatures", "transaction_features.json", "{invalid}"));
+        CommonResult<Map<String, Object>> mismatched = controller.uploadStructuredCaseFile(
+                basic, customers, "NEW", null, null, null,
+                jsonFile("transactionFeatures", "transaction_features.json", "{\"case_id\":\"CASE-2\"}"));
+
+        assertEquals(400, invalidJson.getCode());
+        assertTrue(invalidJson.getMessage().contains("有效 JSON"));
+        assertEquals(400, mismatched.getCode());
+        assertTrue(mismatched.getMessage().contains("case_id 不一致"));
+        assertTrue(Files.notExists(structuredCaseRoot.resolve("uploads")));
+    }
+
+    @Test
+    void newSingleCaseUploadIncludesTransactionFeaturesInFileAndTotalSizeLimits() throws Exception {
+        MockMultipartFile basic = spy(jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"CASE-1\"}"));
+        MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUST-1\"}]");
+        MockMultipartFile features = spy(jsonFile("transactionFeatures", "transaction_features.json", "{}"));
+        long oneMegabyte = 1024L * 1024;
+        doReturn(100 * oneMegabyte + 1).when(features).getSize();
+
+        CommonResult<Map<String, Object>> fileTooLarge = controller.uploadStructuredCaseFile(
+                basic, customers, "NEW", null, null, null, features);
+        doReturn(60 * oneMegabyte).when(features).getSize();
+        doReturn(50 * oneMegabyte).when(basic).getSize();
+        CommonResult<Map<String, Object>> totalTooLarge = controller.uploadStructuredCaseFile(
+                basic, customers, "NEW", null, null, null, features);
+
+        assertEquals(400, fileTooLarge.getCode());
+        assertTrue(fileTooLarge.getMessage().contains("100MB"));
+        assertEquals(400, totalTooLarge.getCode());
+        assertTrue(totalTooLarge.getMessage().contains("100MB"));
+        assertTrue(Files.notExists(structuredCaseRoot.resolve("uploads")));
+    }
+
+    @Test
+    void historicalSingleCaseUploadRejectsTransactionFeatures() throws Exception {
+        MockMultipartFile basic = jsonFile("basicInfo", "basic_info.json", "{\"case_id\":\"CASE-1\"}");
+        MockMultipartFile customers = jsonFile("customers", "customers.json", "[{\"entity_id\":\"CUST-1\"}]");
+        MockMultipartFile analysis = jsonFile("analysisTexts", "analysis_texts.json", "{\"analysis_text1\":\"已有报告\"}");
+        MockMultipartFile features = jsonFile("transactionFeatures", "transaction_features.json", "{}");
+
+        CommonResult<Map<String, Object>> result = controller.uploadStructuredCaseFile(
+                basic, customers, "HISTORICAL", analysis, null, null, features);
+
+        assertEquals(400, result.getCode());
+        assertTrue(result.getMessage().contains("历史案例不接收 transaction_features.json"));
+        assertTrue(Files.notExists(structuredCaseRoot.resolve("uploads")));
     }
 
     @Test

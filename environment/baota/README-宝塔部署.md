@@ -23,7 +23,7 @@
 ## 初始化
 
 1. 将 `bankgraph.env.example` 复制为 `environment/config/.env.production` 并填写密码。
-2. 确认后端 JAR、前端 `dist` 和三个 Worker 已上传。
+2. 确认后端 JAR、前端 `dist` 和三个 Worker 已上传，并在宝塔安装 JDK 17（路径 `/www/server/java/jdk-17`）。
 3. 执行：
 
 ```bash
@@ -37,14 +37,14 @@ bash environment/baota/scripts/install.sh
 
 - 运行目录：`/www/wwwroot/bankgraph/backend`
 - JAR：`/www/wwwroot/bankgraph/backend/app.jar`
-- Java：25
+- Java：17
 - 端口：3030
 - 运行用户：`www`
 
 启动参数：
 
 ```bash
-java -Xmx2048M -Xms512M -jar /www/wwwroot/bankgraph/backend/app.jar \
+/www/server/java/jdk-17/bin/java -Xmx2048M -Xms512M -jar /www/wwwroot/bankgraph/backend/app.jar \
   --server.port=3030 \
   --spring.config.import=optional:file:/www/wwwroot/bankgraph/environment/config/.env.production[.properties]
 ```

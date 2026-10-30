@@ -367,7 +367,15 @@ public class CaseProcessingService {
         write(source, "basic_info.json", raw.path("basic_info")); write(source, "customers.json", raw.path("customers"));
         write(source, "accounts.json", raw.path("accounts"));
         if (fraud) { write(source, "devices.json", raw.path("devices")); write(source, "event_chain.json", raw.path("event_chain")); }
-        else { write(source, "other_entities.json", raw.path("other_entities")); }
+        else {
+            write(source, "other_entities.json", raw.path("other_entities"));
+            JsonNode features = raw.path("transaction_features");
+            if (features.isMissingNode() || features.isNull()) features = raw.path("feature_analysis");
+            if (!features.isMissingNode() && !features.isNull()) {
+                // Old internal inputs may hold a feature array; keep its legacy filename.
+                write(source, features.isArray() ? "feature_analysis.json" : "transaction_features.json", features);
+            }
+        }
     }
 
     private void write(Path root, String name, JsonNode value) throws Exception {

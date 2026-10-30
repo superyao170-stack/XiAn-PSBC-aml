@@ -17,8 +17,11 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+from aml_metrics import classification_metrics
+from collaborative_aml import detect_collaborative_aml
 
-VERSION = "1.5.2"
+
+VERSION = "1.6.0"
 
 
 def canonical_json(value: Any) -> str:
@@ -1854,23 +1857,9 @@ def infer(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate(payload: dict[str, Any]) -> dict[str, Any]:
-    rows = payload.get("rows", [])
-    tp = fp = tn = fn = 0
-    for row in rows:
-        actual = bool(row.get("actual"))
-        predicted = bool(row.get("predicted"))
-        if actual and predicted: tp += 1
-        elif not actual and predicted: fp += 1
-        elif not actual and not predicted: tn += 1
-        else: fn += 1
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "inputSnapshotSha256": digest(payload),
-        "metrics": {"truePositive": tp, "falsePositive": fp, "trueNegative": tn,
-                    "falseNegative": fn, "precision": round(precision, 8),
-                    "recall": round(recall, 8), "f1": round(f1, 8)},
+        "metrics": classification_metrics(payload.get("rows", [])),
     }
 
 
@@ -1901,6 +1890,7 @@ HANDLERS = {
     "/v1/case-matters/explain": explain_case,
     "/v1/inference": infer,
     "/v1/evaluations/run": evaluate,
+    "/v1/collaborative-aml/detect": detect_collaborative_aml,
     "/v1/replay": replay,
 }
 
